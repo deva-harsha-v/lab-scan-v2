@@ -39,17 +39,16 @@ router.get('/by-marker/:markerId', async (req, res) => {
 router.get('/', optionalAuth, async (req, res) => {
   const labId = req.query.labId;
   
-  let studentBranchId = null;
-  const userRole = req.user?.role;
+  let branchIdToFilter = null;
 
-  if (userRole === 'student') {
+  if (req.user) {
     try {
       const users = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
       if (users.length > 0) {
-        studentBranchId = users[0].branch_id;
+        branchIdToFilter = users[0].branch_id;
       }
     } catch (e) {
-      console.error('Error fetching optional student branch details:', e);
+      console.error('Error fetching optional user branch details:', e);
     }
   }
 
@@ -62,12 +61,12 @@ router.get('/', optionalAuth, async (req, res) => {
     `;
     const params = [];
 
-    if (userRole === 'student' && studentBranchId) {
+    if (branchIdToFilter) {
       queryStr += `
         INNER JOIN lab_branches lb ON l.lab_id = lb.lab_id
         WHERE lb.branch_id = ?
       `;
-      params.push(studentBranchId);
+      params.push(branchIdToFilter);
       if (labId) {
         queryStr += ' AND e.lab_id = ?';
         params.push(labId);
@@ -111,20 +110,18 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     const exp = experiments[0];
 
-    // Enforce branch-based access control for students
+    // Enforce branch-based access control for students & scoped admins
     if (req.user) {
       try {
-        if (req.user.role === 'student') {
-          const users = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
-          if (users.length > 0 && users[0].branch_id) {
-            const studentBranchId = users[0].branch_id;
-            const allowed = await db.query(`
-              SELECT 1 FROM lab_branches 
-              WHERE lab_id = ? AND branch_id = ?
-            `, [exp.lab_id, studentBranchId]);
-            if (allowed.length === 0) {
-              return res.status(403).json({ error: 'Access Denied: This laboratory module is not assigned to your academic branch.' });
-            }
+        const users = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+        if (users.length > 0 && users[0].branch_id) {
+          const userBranchId = users[0].branch_id;
+          const allowed = await db.query(`
+            SELECT 1 FROM lab_branches 
+            WHERE lab_id = ? AND branch_id = ?
+          `, [exp.lab_id, userBranchId]);
+          if (allowed.length === 0) {
+            return res.status(403).json({ error: 'Access Denied: This laboratory module is not assigned to your academic branch.' });
           }
         }
       } catch (e) {
@@ -216,6 +213,18 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(experim
     return res.status(400).json({ error: 'Lab ID is required.' });
   }
 
+  let adminBranchId = null;
+  const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+  if (userRes.length > 0 && userRes[0].branch_id) {
+    adminBranchId = userRes[0].branch_id;
+  }
+  if (adminBranchId) {
+    const allowed = await db.query('SELECT 1 FROM lab_branches WHERE lab_id = ? AND branch_id = ?', [lab_id, adminBranchId]);
+    if (allowed.length === 0) {
+      return res.status(403).json({ error: 'Access Denied: You do not have permission to add experiments to this lab.' });
+    }
+  }
+
   if (!validateVideoLinks(video_links)) {
     return res.status(400).json({ error: 'Invalid video URL. Only YouTube and Google Drive links are allowed.' });
   }
@@ -301,6 +310,21 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(exper
 
     const oldExp = exps[0];
 
+    let adminBranchId = null;
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      adminBranchId = userRes[0].branch_id;
+    }
+    if (adminBranchId) {
+      const allowed = await db.query(`
+        SELECT 1 FROM lab_branches 
+        WHERE lab_id = ? AND branch_id = ?
+      `, [oldExp.lab_id, adminBranchId]);
+      if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Access Denied: You do not have permission to edit experiments in this lab.' });
+      }
+    }
+
     // 2. Fetch current latest version
     const versions = await db.query(
       'SELECT * FROM experiment_content_versions WHERE experiment_id = ? ORDER BY version_number DESC LIMIT 1',
@@ -370,6 +394,21 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
     }
 
     const exp = exps[0];
+
+    let adminBranchId = null;
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      adminBranchId = userRes[0].branch_id;
+    }
+    if (adminBranchId) {
+      const allowed = await db.query(`
+        SELECT 1 FROM lab_branches 
+        WHERE lab_id = ? AND branch_id = ?
+      `, [exp.lab_id, adminBranchId]);
+      if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Access Denied: You do not have permission to delete experiments in this lab.' });
+      }
+    }
 
     // Pre-check for session records to provide a friendly error message
     const sessions = await db.query('SELECT COUNT(*) as count FROM student_sessions WHERE experiment_id = ?', [experimentId]);

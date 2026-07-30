@@ -285,6 +285,7 @@ async function runSuite() {
       const res = await request('/api/branches', 'POST', { name: testBranchName }, adminCookies);
       if (res.body?.branch?.branch_id) {
         testBranchIdRef.id = res.body.branch.branch_id;
+        await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [testBranchIdRef.id]);
       }
       return res;
     }
@@ -519,6 +520,12 @@ async function runSuite() {
         stage: 'learning'
       }, testStudentCookies);
 
+      // 5b. Student completes visual stage
+      await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'visual'
+      }, testStudentCookies);
+
       // 6. Student toggles checklist item
       const checklistItemsRes = await db.query('SELECT checklist_item_id FROM student_checklist_progress WHERE student_session_id = ?', [sessionId]);
       if (checklistItemsRes.length > 0) {
@@ -535,6 +542,78 @@ async function runSuite() {
     }
   );
 
+  await addResult('RBAC-07', 'Branch-based access filtering (Student cannot access Branch B lab/experiment)',
+    (res) => res.statusCode === 403,
+    async () => {
+      // 1. Create a branch ECE Only
+      const branchRes = await request('/api/branches', 'POST', { name: `ECE Only ${rand}` }, adminCookies);
+      const branchId = branchRes.body?.branch?.branch_id;
+      if (!branchId) return { statusCode: 500, body: 'Failed to create branch' };
+
+      // 2. Create a lab mapped only to ECE
+      const labRes = await request('/api/labs', 'POST', {
+        lab_name: `ECE Lab ${rand}`,
+        allowed_branches: [branchId]
+      }, adminCookies);
+      const labId = labRes.body?.lab?.lab_id;
+      if (!labId) return { statusCode: 500, body: 'Failed to create lab' };
+
+      // 3. Create an experiment under ECE lab
+      const usedMarkers = await db.query('SELECT ar_qr_marker_id FROM experiments');
+      const usedSet = new Set(usedMarkers.map(m => m.ar_qr_marker_id));
+      let testMarkerId = 30;
+      while (usedSet.has(testMarkerId) && testMarkerId < 99) {
+        testMarkerId++;
+      }
+
+      const expRes = await request('/api/experiments', 'POST', {
+        experiment_name: `ECE Exp ${rand}`,
+        lab_id: labId,
+        ar_qr_marker_id: testMarkerId,
+        theory_procedure_json: ['theory step'],
+        video_links: [{ url: 'https://youtube.com/watch?v=123', title: 'Video Title' }],
+        checklist_items: ['Item 1']
+      }, adminCookies);
+      const experimentId = expRes.body?.experiment_id;
+      if (!experimentId) return { statusCode: 500, body: 'Failed to create experiment' };
+
+      // 4. Try to start session as student1 (who is CSE)
+      const student1Res = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = student1Res.cookies;
+
+      return await request('/api/sessions/start', 'POST', { experiment_id: experimentId }, testStudentCookies);
+    }
+  );
+
+  await addResult('SEC-08', 'Session-stage progression bypass check (Sequential stages enforced)',
+    (res) => res.statusCode === 400,
+    async () => {
+      const loginRes = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = loginRes.cookies;
+
+      const exps = await db.query(`
+        SELECT e.experiment_id FROM experiments e
+        JOIN lab_branches lb ON lb.lab_id = e.lab_id
+        WHERE lb.branch_id = ? LIMIT 1
+      `, [testBranchIdRef.id]);
+      if (exps.length === 0) return { statusCode: 500, body: 'No valid experiment found' };
+
+      const expId = exps[0].experiment_id;
+
+      const startRes = await request('/api/sessions/start', 'POST', { experiment_id: expId }, testStudentCookies);
+      let sessionId = startRes.body?.session?.session_id;
+      if (!sessionId) {
+        const activeRes = await request(`/api/sessions/active/${expId}`, 'GET', null, testStudentCookies);
+        sessionId = activeRes.body?.session?.session_id || activeRes.body?.session_id;
+      }
+      if (!sessionId) return { statusCode: 500, body: 'Failed to retrieve or start session' };
+
+      return await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'complete'
+      }, testStudentCookies);
+    }
+  );
 
   await addResult('PAY-03', 'Deliberate server error (malformed JSON) returns generic error', 
     (res) => res.statusCode === 400 || res.statusCode === 500,

@@ -39,6 +39,25 @@ router.post('/start', sessionLimiter, authenticateToken, requireRole(['student']
       });
     }
 
+    // Verify branch access for this experiment
+    const exps = await db.query('SELECT lab_id FROM experiments WHERE experiment_id = ?', [experiment_id]);
+    if (exps.length === 0) {
+      return res.status(404).json({ error: 'Experiment not found.' });
+    }
+    const labId = exps[0].lab_id;
+
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [studentId]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      const studentBranchId = userRes[0].branch_id;
+      const allowed = await db.query(
+        'SELECT 1 FROM lab_branches WHERE lab_id = ? AND branch_id = ?',
+        [labId, studentBranchId]
+      );
+      if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Access Denied: This experiment is not assigned to your academic branch.' });
+      }
+    }
+
     // 2. Fetch the latest content version for this experiment
     const versions = await db.query(
       'SELECT content_version_id FROM experiment_content_versions WHERE experiment_id = ? ORDER BY version_number DESC LIMIT 1',
@@ -182,10 +201,19 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
       if (stage === 'learning') {
         await db.query('UPDATE student_sessions SET learning_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'visual') {
+        if (!session.learning_stage_completed_at) {
+          return res.status(400).json({ error: 'Cannot complete visual stage before completing learning stage.' });
+        }
         await db.query('UPDATE student_sessions SET visual_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'checklist') {
+        if (!session.visual_stage_completed_at) {
+          return res.status(400).json({ error: 'Cannot complete checklist stage before completing visual stage.' });
+        }
         await db.query('UPDATE student_sessions SET checklist_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'complete') {
+        if (!session.checklist_completed_at) {
+          return res.status(400).json({ error: 'Cannot complete session before completing checklist stage.' });
+        }
         await db.query('UPDATE student_sessions SET session_completed_at = ? WHERE session_id = ?', [now, session_id]);
       }
       
@@ -210,6 +238,10 @@ router.put('/checklist', sessionLimiter, authenticateToken, requireRole(['studen
     const sessions = await db.query('SELECT * FROM student_sessions WHERE session_id = ? AND student_id = ?', [session_id, studentId]);
     if (sessions.length === 0) {
       return res.status(403).json({ error: 'Unauthorized session access.' });
+    }
+
+    if (!sessions[0].visual_stage_completed_at) {
+      return res.status(400).json({ error: 'Cannot update checklist progress before completing visual stage.' });
     }
 
     const completedAt = is_completed ? new Date() : null;

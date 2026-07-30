@@ -9,31 +9,29 @@ const { validateBody, labSchema } = require('../utils/validators');
 
 // GET /api/labs - Accessible to all (Admins, Students, Ghost/unauthenticated)
 router.get('/', optionalAuth, async (req, res) => {
-  let studentBranchId = null;
-  const userRole = req.user?.role;
+  let branchIdToFilter = null;
 
-  if (userRole === 'student') {
+  if (req.user) {
     try {
-      // Fetch student branch_id from DB
       const users = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
       if (users.length > 0) {
-        studentBranchId = users[0].branch_id;
+        branchIdToFilter = users[0].branch_id;
       }
     } catch (e) {
-      console.error('Error fetching student branch optional details:', e);
+      console.error('Error fetching user branch optional details:', e);
     }
   }
 
   try {
     let labs;
-    if (userRole === 'student' && studentBranchId) {
-      // Filter labs assigned to student's branch
+    if (branchIdToFilter) {
+      // Filter labs assigned to student's/scoped admin's branch
       labs = await db.query(`
         SELECT DISTINCT l.* FROM labs l
         INNER JOIN lab_branches lb ON l.lab_id = lb.lab_id
         WHERE lb.branch_id = ?
         ORDER BY l.created_at DESC
-      `, [studentBranchId]);
+      `, [branchIdToFilter]);
     } else {
       labs = await db.query('SELECT * FROM labs ORDER BY created_at DESC');
     }
@@ -58,6 +56,17 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(labSche
   const { lab_name, description, location, allowed_branches } = req.body;
 
   try {
+    let adminBranchId = null;
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      adminBranchId = userRes[0].branch_id;
+    }
+    if (adminBranchId) {
+      if (!allowed_branches || !Array.isArray(allowed_branches) || allowed_branches.length !== 1 || allowed_branches[0] !== adminBranchId) {
+        return res.status(403).json({ error: 'Access Denied: As a scoped admin, you can only create/map labs for your own branch.' });
+      }
+    }
+
     const labId = crypto.randomUUID();
     
     await db.executeTransaction(async (conn) => {
@@ -102,6 +111,21 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(labSc
       return res.status(404).json({ error: 'Lab not found.' });
     }
 
+    let adminBranchId = null;
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      adminBranchId = userRes[0].branch_id;
+    }
+    if (adminBranchId) {
+      const allowed = await db.query('SELECT 1 FROM lab_branches WHERE lab_id = ? AND branch_id = ?', [labId, adminBranchId]);
+      if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Access Denied: You do not have permission to manage this lab.' });
+      }
+      if (!allowed_branches || !Array.isArray(allowed_branches) || allowed_branches.length !== 1 || allowed_branches[0] !== adminBranchId) {
+        return res.status(403).json({ error: 'Access Denied: As a scoped admin, you can only map labs to your own branch.' });
+      }
+    }
+
     const oldLab = labs[0];
     
     await db.executeTransaction(async (conn) => {
@@ -144,6 +168,18 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
     const labs = await db.query('SELECT * FROM labs WHERE lab_id = ?', [labId]);
     if (labs.length === 0) {
       return res.status(404).json({ error: 'Lab not found.' });
+    }
+
+    let adminBranchId = null;
+    const userRes = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [req.user.user_id]);
+    if (userRes.length > 0 && userRes[0].branch_id) {
+      adminBranchId = userRes[0].branch_id;
+    }
+    if (adminBranchId) {
+      const allowed = await db.query('SELECT 1 FROM lab_branches WHERE lab_id = ? AND branch_id = ?', [labId, adminBranchId]);
+      if (allowed.length === 0) {
+        return res.status(403).json({ error: 'Access Denied: You do not have permission to delete this lab.' });
+      }
     }
 
     const lab = labs[0];
