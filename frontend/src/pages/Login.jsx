@@ -6,6 +6,10 @@ import { User, Lock, ArrowLeft, Loader2, Eye, EyeOff, Info, Check, ChevronRight 
 import ThemeToggle from '../components/ThemeToggle';
 import LabScanLogo from '../components/LabScanLogo';
 
+if (!import.meta.env.VITE_API_BASE) {
+  throw new Error("FATAL: Environment variable VITE_API_BASE is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
+}
+
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +33,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE || ('http://localhost' + ':5000');
+      const apiBase = import.meta.env.VITE_API_BASE;
       const response = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

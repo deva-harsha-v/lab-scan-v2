@@ -1,4 +1,8 @@
-const API_BASE = (import.meta.env.VITE_API_BASE || ('http://localhost' + ':5000')) + '/api';
+if (!import.meta.env.VITE_API_BASE) {
+  throw new Error("FATAL: Environment variable VITE_API_BASE is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
+}
+
+const API_BASE = import.meta.env.VITE_API_BASE + '/api';
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;

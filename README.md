@@ -13,6 +13,7 @@ An enterprise-ready, containerized web application designed for academic institu
 
 ## 1. Environment Configuration
 
+### Backend Configuration
 Copy the template from `backend/.env.example` to `backend/.env`.
 
 | Parameter | Type | Default | Description |
@@ -27,6 +28,15 @@ Copy the template from `backend/.env.example` to `backend/.env`.
 | `DB_POOL_MAX` | Integer | `20` | Maximum number of concurrent connections in the PG pool. |
 | `ALLOWED_ORIGINS` | String | *Required* | Comma-separated list of CORS origins allowed in production. |
 | `MEDIA_SIGN_SECRET` | String | *Required* | Secret key used to verify QR/marker signatures. |
+| `SENTRY_DSN` | String | *Optional* | Sentry project DSN for backend error logging. |
+
+### Frontend Configuration
+Copy the template from `frontend/.env.example` to `frontend/.env`.
+
+| Parameter | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `VITE_API_BASE` | String | *Required* | Base URL of the REST API (must be specified at build time). If missing, the app will throw a fatal boot error to prevent broken deployments. |
+| `VITE_SENTRY_DSN` | String | *Optional* | Sentry project DSN for frontend error logging. |
 
 ---
 
