@@ -5,9 +5,19 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const { getPool } = require('./src/config/db');
 const logger = require('./src/utils/logger');
+const Sentry = require("@sentry/node");
 
 // Load environment variables
 dotenv.config();
+
+// Initialize Sentry for unhandled error tracking (gated behind SENTRY_DSN env var)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: 1.0,
+  });
+}
 
 // Validate required environment variables on boot
 const requiredEnvVars = ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL'];
@@ -123,6 +133,11 @@ app.get('/health/ready', async (req, res) => {
 app.get('/health', (req, res) => {
   res.redirect('/health/ready');
 });
+
+// Sentry Express error handler (gated behind process.env.SENTRY_DSN)
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // Global unhandled error-catching middleware (prevents process crash & stack leaks)
 app.use((err, req, res, next) => {
