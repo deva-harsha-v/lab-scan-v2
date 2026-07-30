@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ArUco Marker Generator (matches scanner exactly)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 20px; }
+    label { display: block; margin-top: 16px; font-size: 14px; color: #444; }
+    input, select { font-size: 16px; padding: 6px 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }
+    #markerWrap { margin-top: 24px; text-align: center; }
+    #markerWrap svg { width: 280px; height: 280px; border: 1px solid #ccc; }
+    #errorMsg { color: #b00020; margin-top: 12px; font-size: 14px; }
+    button { margin-top: 16px; padding: 10px 16px; font-size: 15px; cursor: pointer; }
+    .note { font-size: 13px; color: #666; margin-top: 24px; line-height: 1.5; }
+    @media print {
+      label, button, .note, h1, #dictSelect { display: none; }
+      #markerWrap svg { width: 100mm; height: 100mm; border: none; }
+    }
+  </style>
+</head>
+<body>
+  <h1>ArUco Marker Generator</h1>
+  <p style="font-size:14px;color:#555">
+    Generates markers using the <strong>same aruco.js code the scanner uses to detect them</strong> —
+    no third-party generator, so there's no risk of a dictionary/orientation mismatch.
+  </p>
+
+  <label>
+    Dictionary
+    <select id="dictSelect">
+      <option value="ARUCO_MIP_36h12" selected>ARUCO_MIP_36h12 (default — matches scanner unless changed in code)</option>
+      <option value="ARUCO">ARUCO (original, 25-bit)</option>
+    </select>
+  </label>
+
+  <label>
+    Marker ID
+    <input type="number" id="markerId" value="10" min="0" />
+  </label>
+
+  <div id="errorMsg"></div>
+  <div id="markerWrap"></div>
+
+  <button onclick="window.print()">Print / Save as PDF</button>
+
+  <p class="note">
+    Tip: leave a solid white margin around the printed marker when you cut it out —
+    the detector needs that quiet zone to lock onto the border.
+  </p>
+
+  <script src="/aruco.js"></script>
+  <script>
+    const idInput = document.getElementById('markerId');
+    const dictSelect = document.getElementById('dictSelect');
+    const wrap = document.getElementById('markerWrap');
+    const errorMsg = document.getElementById('errorMsg');
+
+    function render() {
+      errorMsg.textContent = '';
+      wrap.innerHTML = '';
+      try {
+        const dict = new AR.Dictionary(dictSelect.value);
+        const id = parseInt(idInput.value, 10);
+        if (isNaN(id)) throw 'Enter a valid marker ID number.';
+        const svg = dict.generateSVG(id);
+        wrap.innerHTML = svg;
+      } catch (err) {
+        errorMsg.textContent = typeof err === 'string' ? err : 'Could not generate marker: ' + err.message;
+      }
+    }
+
+    idInput.addEventListener('input', render);
+    dictSelect.addEventListener('change', render);
+    render();
+  </script>
+</body>
+</html>
