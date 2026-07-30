@@ -616,7 +616,7 @@ router.put('/students/:id/reset-password', tightLimiter, authenticateToken, requ
 
 // POST /api/auth/bulk-import - Bulk Excel student ingestion endpoint
 router.post('/bulk-import', moderateLimiter, authenticateToken, requireRole(['admin']), async (req, res) => {
-  const { students, default_password } = req.body;
+  const { students, default_password, dry_run } = req.body;
 
   if (!students || !Array.isArray(students) || students.length === 0) {
     return res.status(400).json({ error: 'A list of students is required.' });
@@ -654,7 +654,8 @@ router.post('/bulk-import', moderateLimiter, authenticateToken, requireRole(['ad
       const processedRolls = new Set();
       const rowsToInsert = [];
 
-      const passwordHash = await bcrypt.hash(default_password, 10);
+      // Only hash password if it's a real import, saving processing power during dry-run previews
+      const passwordHash = !dry_run ? await bcrypt.hash(default_password, 10) : null;
 
       for (let idx = 0; idx < students.length; idx++) {
         const row = students[idx];
@@ -692,7 +693,7 @@ router.post('/bulk-import', moderateLimiter, authenticateToken, requireRole(['ad
         imported.push({ student_id: studentId, roll_number: roll, full_name: name });
       }
 
-      if (rowsToInsert.length > 0) {
+      if (rowsToInsert.length > 0 && !dry_run) {
         const valuePlaceholders = [];
         const params = [];
         
@@ -723,16 +724,21 @@ router.post('/bulk-import', moderateLimiter, authenticateToken, requireRole(['ad
 
     const { imported, duplicates, invalidRows } = result;
 
-    // Log the bulk import
-    await logAction(req.user.user_id, 'BULK_IMPORT_STUDENTS', 'SYSTEM', null, {
-      total: students.length,
-      imported: imported.length,
-      duplicates: duplicates.length,
-      invalid: invalidRows.length
-    });
+    if (!dry_run) {
+      // Log the bulk import
+      await logAction(req.user.user_id, 'BULK_IMPORT_STUDENTS', 'SYSTEM', null, {
+        total: students.length,
+        imported: imported.length,
+        duplicates: duplicates.length,
+        invalid: invalidRows.length
+      });
+    }
 
     res.json({
-      message: `Bulk import completed. Successfully imported ${imported.length} students.`,
+      message: dry_run
+        ? `Bulk import preview generated. ${imported.length} students ready to import.`
+        : `Bulk import completed. Successfully imported ${imported.length} students.`,
+      dry_run: !!dry_run,
       summary: {
         total: students.length,
         importedCount: imported.length,

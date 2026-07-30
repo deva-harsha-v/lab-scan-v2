@@ -132,6 +132,8 @@ export default function AdminDashboard() {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [importData, setImportData] = useState([]);
+  const [importPreview, setImportPreview] = useState(null);
 
   useEffect(() => {
     if (!importFile) {
@@ -500,7 +502,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleExcelImport = () => {
+  const handleExcelPreview = () => {
     if (!importFile) {
       alert('Please choose an Excel file first.');
       return;
@@ -515,6 +517,7 @@ export default function AdminDashboard() {
     }
 
     setImportLoading(true);
+    setImportPreview(null);
     setImportResult(null);
 
     const reader = new FileReader();
@@ -526,25 +529,68 @@ export default function AdminDashboard() {
         const worksheet = workbook.Sheets[firstSheetName];
         const json = XLSX.utils.sheet_to_json(worksheet);
 
+        setImportData(json);
+
         const response = await apiFetch('/auth/bulk-import', {
           method: 'POST',
           body: JSON.stringify({
             students: json,
-            default_password: importPassword
+            default_password: importPassword,
+            dry_run: true
           })
         });
 
-        setImportResult(response);
-        setImportFile(null);
-        setImportPassword('');
-        loadStudentsData(studentsPage, studentsSearch, studentsBranchFilter, studentsPwFilter);
+        setImportPreview(response);
       } catch (err) {
-        alert('Failed parsing/uploading Excel data: ' + err.message);
+        alert('Failed parsing/generating preview: ' + err.message);
       } finally {
         setImportLoading(false);
       }
     };
     reader.readAsArrayBuffer(importFile);
+  };
+
+  const handleExcelCommit = async () => {
+    if (!importData || importData.length === 0) {
+      alert('No preview data found to import.');
+      return;
+    }
+    if (!importPassword || importPassword.length < 8) {
+      alert('Please specify a default password of at least 8 characters.');
+      return;
+    }
+
+    setImportLoading(true);
+
+    try {
+      const response = await apiFetch('/auth/bulk-import', {
+        method: 'POST',
+        body: JSON.stringify({
+          students: importData,
+          default_password: importPassword,
+          dry_run: false
+        })
+      });
+
+      setImportResult(response);
+      setImportPreview(null);
+      setImportData([]);
+      setImportFile(null);
+      setImportPassword('');
+      loadStudentsData(studentsPage, studentsSearch, studentsBranchFilter, studentsPwFilter);
+    } catch (err) {
+      alert('Failed executing bulk import: ' + err.message);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const cancelExcelImport = () => {
+    setImportPreview(null);
+    setImportData([]);
+    setImportFile(null);
+    setImportPassword('');
+    setImportResult(null);
   };
 
   const downloadSampleTemplate = () => {
@@ -559,26 +605,26 @@ export default function AdminDashboard() {
     XLSX.writeFile(workbook, "labscan_student_import_template.xlsx");
   };
 
-  const downloadImportErrorReport = () => {
-    if (!importResult) return;
+  const downloadImportErrorReport = (target = importResult) => {
+    if (!target) return;
     let content = "=== LabScan Excel Import Error Report ===\n\n";
     content += `Summary:\n`;
-    content += `- Total Input Rows: ${importResult.summary.total}\n`;
-    content += `- Successfully Imported: ${importResult.summary.importedCount}\n`;
-    content += `- Duplicates Rejected: ${importResult.summary.duplicatesCount}\n`;
-    content += `- Invalid Rows Skipped: ${importResult.summary.invalidCount}\n\n`;
+    content += `- Total Input Rows: ${target.summary.total}\n`;
+    content += `- Successfully Mapped/Imported: ${target.summary.importedCount}\n`;
+    content += `- Duplicates Rejected: ${target.summary.duplicatesCount}\n`;
+    content += `- Invalid Rows Skipped: ${target.summary.invalidCount}\n\n`;
 
-    if (importResult.duplicates.length > 0) {
+    if (target.duplicates.length > 0) {
       content += "=== Duplicate Roll Numbers ===\n";
-      importResult.duplicates.forEach(d => {
+      target.duplicates.forEach(d => {
         content += `Row ${d.row}: Roll Number "${d.roll_number}" - ${d.error}\n`;
       });
       content += "\n";
     }
 
-    if (importResult.invalidRows.length > 0) {
+    if (target.invalidRows.length > 0) {
       content += "=== Invalid or Malformed Rows ===\n";
-      importResult.invalidRows.forEach(i => {
+      target.invalidRows.forEach(i => {
         content += `Row ${i.row}: ${i.roll_number ? `Roll "${i.roll_number}" - ` : ''}${i.error}\n`;
       });
     }
@@ -587,7 +633,7 @@ export default function AdminDashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = "labscan_import_error_report.txt";
+    link.download = target.dry_run ? "labscan_import_preview_report.txt" : "labscan_import_error_report.txt";
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -1777,26 +1823,97 @@ export default function AdminDashboard() {
                     </div>
                     
                     <div className="admin-action-row">
-                      <button 
-                        className="academic-btn btn-academic-primary" 
-                        style={{ flex: 1 }}
-                        onClick={handleExcelImport}
-                        disabled={importLoading || !importFile}
-                      >
-                        {importLoading ? 'Processing Ingestion...' : 'Import Students'}
-                      </button>
+                      {!importPreview ? (
+                        <button 
+                          className="academic-btn btn-academic-primary" 
+                          style={{ flex: 1 }}
+                          onClick={handleExcelPreview}
+                          disabled={importLoading || !importFile}
+                        >
+                          {importLoading ? 'Analyzing File...' : 'Preview Import'}
+                        </button>
+                      ) : (
+                        <button 
+                          className="academic-btn btn-academic-secondary" 
+                          style={{ flex: 1 }}
+                          onClick={cancelExcelImport}
+                          disabled={importLoading}
+                        >
+                          Reset
+                        </button>
+                      )}
                       <button className="academic-btn btn-academic-secondary" onClick={downloadSampleTemplate}>
                         <Download size={14} /> Template
                       </button>
                     </div>
                   </div>
 
-                  {importResult && (
+                  {importPreview && (
                     <div style={{ marginTop: '14px', padding: '10px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', fontSize: '12px' }}>
-                      <div style={{ fontWeight: 700, marginBottom: '4px' }}>Import Summary</div>
+                      <div style={{ fontWeight: 700, marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Import Preview</span>
+                        <span style={{ fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>PREVIEW</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px', color: 'var(--text-secondary)' }}>
+                        <div>Total Records: {importPreview.summary.total}</div>
+                        <div style={{ color: '#22c55e', fontWeight: 600 }}>Ready: {importPreview.summary.importedCount}</div>
+                        <div style={{ color: '#f59e0b' }}>Duplicates: {importPreview.summary.duplicatesCount}</div>
+                        <div style={{ color: '#ef4444' }}>Invalid: {importPreview.summary.invalidCount}</div>
+                      </div>
+
+                      {/* Scrollable list of errors / warnings */}
+                      {(importPreview.duplicates.length > 0 || importPreview.invalidRows.length > 0) && (
+                        <div style={{ marginTop: '8px', maxHeight: '100px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '6px', backgroundColor: 'rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {importPreview.duplicates.map((d, i) => (
+                            <div key={`prev-dup-${i}`} style={{ color: '#f59e0b', fontSize: '10px' }}>
+                              ⚠️ Row {d.row}: Roll "{d.roll_number}" - Duplicate
+                            </div>
+                          ))}
+                          {importPreview.invalidRows.map((inv, i) => (
+                            <div key={`prev-inv-${i}`} style={{ color: '#ef4444', fontSize: '10px' }}>
+                              ❌ Row {inv.row}: {inv.error}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                        <button 
+                          className="academic-btn btn-academic-success" 
+                          style={{ flex: 1, padding: '6px 12px', fontSize: '11px', backgroundColor: '#22c55e', color: '#fff', border: 'none' }}
+                          onClick={handleExcelCommit}
+                          disabled={importLoading || importPreview.summary.importedCount === 0}
+                        >
+                          {importLoading ? 'Committing...' : `Confirm & Import (${importPreview.summary.importedCount})`}
+                        </button>
+                        <button 
+                          className="academic-btn btn-academic-secondary" 
+                          style={{ padding: '6px 12px', fontSize: '11px' }}
+                          onClick={cancelExcelImport}
+                          disabled={importLoading}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      {(importPreview.duplicates.length > 0 || importPreview.invalidRows.length > 0) && (
+                        <button 
+                          className="academic-btn btn-academic-secondary" 
+                          style={{ marginTop: '8px', width: '100%', fontSize: '10.5px', padding: '5px' }}
+                          onClick={() => downloadImportErrorReport(importPreview)}
+                        >
+                          Download Preview Report
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {importResult && (
+                    <div style={{ marginTop: '14px', padding: '10px', borderRadius: '6px', backgroundColor: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)', fontSize: '12px' }}>
+                      <div style={{ fontWeight: 700, marginBottom: '4px', color: '#22c55e' }}>Import Completed Successfully</div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px', color: 'var(--text-secondary)' }}>
                         <div>Total Records: {importResult.summary.total}</div>
-                        <div>Successful: {importResult.summary.importedCount}</div>
+                        <div>Successfully Imported: {importResult.summary.importedCount}</div>
                         <div>Duplicates: {importResult.summary.duplicatesCount}</div>
                         <div>Invalid: {importResult.summary.invalidCount}</div>
                       </div>
@@ -1804,9 +1921,9 @@ export default function AdminDashboard() {
                         <button 
                           className="academic-btn btn-academic-secondary" 
                           style={{ marginTop: '8px', width: '100%', fontSize: '10.5px', padding: '5px' }}
-                          onClick={downloadImportErrorReport}
+                          onClick={() => downloadImportErrorReport(importResult)}
                         >
-                          Download Error Report
+                          Download Final Error Report
                         </button>
                       )}
                     </div>
