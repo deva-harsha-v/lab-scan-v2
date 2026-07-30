@@ -1,0 +1,115 @@
+name: LabScan CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint Codebase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Frontend Dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Run Linter
+        working-directory: ./frontend
+        run: npm run lint
+
+  test:
+    name: Backend Test Suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Backend Dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Run Database Migrations & Seeds
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres?sslmode=disable
+          JWT_ACCESS_SECRET: test_jwt_access_secret_key_32_characters_long_minimum
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_key_32_characters_long_minimum
+        run: |
+          node src/config/migrate.js
+          node src/config/seed.js
+
+      - name: Start Server in Test Mode
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres?sslmode=disable
+          JWT_ACCESS_SECRET: test_jwt_access_secret_key_32_characters_long_minimum
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_key_32_characters_long_minimum
+          NODE_ENV: test
+        run: npm start &
+
+      - name: Run Integration Tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/postgres?sslmode=disable
+          JWT_ACCESS_SECRET: test_jwt_access_secret_key_32_characters_long_minimum
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_key_32_characters_long_minimum
+          NODE_ENV: test
+        run: |
+          sleep 3
+          node tests/run_full_test_suite.js
+
+  deploy:
+    name: Deploy to Production
+    needs: [lint, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Backend to Render
+        env:
+          RENDER_BACKEND_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_BACKEND_HOOK" ]; then
+            curl -X POST "$RENDER_BACKEND_HOOK"
+          else
+            echo "Skipping backend deploy: RENDER_BACKEND_DEPLOY_HOOK secret is not set."
+          fi
+
+      - name: Deploy Frontend to Render
+        env:
+          RENDER_FRONTEND_HOOK: ${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_FRONTEND_HOOK" ]; then
+            curl -X POST "$RENDER_FRONTEND_HOOK"
+          else
+            echo "Skipping frontend deploy: RENDER_FRONTEND_DEPLOY_HOOK secret is not set."
+          fi
