@@ -106,6 +106,27 @@ function tamperToken(token) {
   }
 }
 
+// Helper to satisfy video minimum duration requirements for tests
+async function fulfillVideoProgress(sessionId) {
+  const sessions = await db.query('SELECT content_version_id FROM student_sessions WHERE session_id = ?', [sessionId]);
+  if (sessions.length === 0) return;
+  const contentVersionId = sessions[0].content_version_id;
+  
+  const versions = await db.query('SELECT video_links FROM experiment_content_versions WHERE content_version_id = ?', [contentVersionId]);
+  if (versions.length === 0) return;
+  
+  const videoLinks = typeof versions[0].video_links === 'string'
+    ? JSON.parse(versions[0].video_links)
+    : (versions[0].video_links || []);
+    
+  const progress = {};
+  for (const video of videoLinks) {
+    progress[video.id] = video.min_duration;
+  }
+  
+  await db.query('UPDATE student_sessions SET current_video_progress = ? WHERE session_id = ?', [JSON.stringify(progress), sessionId]);
+}
+
 async function runSuite() {
   console.log('==================================================');
   console.log('    LABSCAN INTEGRATED AUTOMATED TEST SUITE        ');
@@ -521,6 +542,7 @@ async function runSuite() {
       }, testStudentCookies);
 
       // 5. Student completes learning stage
+      await fulfillVideoProgress(sessionId);
       await request('/api/sessions/progress', 'PUT', {
         session_id: sessionId,
         stage: 'learning'
@@ -695,6 +717,7 @@ async function runSuite() {
         scanned_marker_id: testMarkerId
       }, testStudentCookies);
 
+      await fulfillVideoProgress(sessionId);
       await request('/api/sessions/progress', 'PUT', {
         session_id: sessionId,
         stage: 'learning'
@@ -761,6 +784,7 @@ async function runSuite() {
         scanned_marker_id: testMarkerId
       }, testStudentCookies);
 
+      await fulfillVideoProgress(sessionId);
       await request('/api/sessions/progress', 'PUT', {
         session_id: sessionId,
         stage: 'learning'
@@ -780,6 +804,62 @@ async function runSuite() {
       await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [testBranchIdRef.id]);
 
       return checklistRes;
+    }
+  );
+
+  await addResult('SEC-12', 'Session-stage progression - cannot complete learning stage without watching videos',
+    (res) => res.statusCode === 400 && res.body.error && res.body.error.includes('must be watched'),
+    async () => {
+      const loginRes = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = loginRes.cookies;
+
+      const branchRes = await request('/api/branches', 'POST', { name: `SEC12 Branch ${rand}` }, adminCookies);
+      const branchId = branchRes.body?.branch?.branch_id;
+      if (!branchId) return { statusCode: 500, body: 'Failed to create branch' };
+
+      const labRes = await request('/api/labs', 'POST', {
+        lab_name: `SEC12 Lab ${rand}`,
+        allowed_branches: [branchId]
+      }, adminCookies);
+      const labId = labRes.body?.lab?.lab_id;
+      if (!labId) return { statusCode: 500, body: 'Failed to create lab' };
+
+      const usedMarkers = await db.query('SELECT ar_qr_marker_id FROM experiments');
+      const usedSet = new Set(usedMarkers.map(m => m.ar_qr_marker_id));
+      let testMarkerId = 70;
+      while (usedSet.has(testMarkerId) && testMarkerId < 99) {
+        testMarkerId++;
+      }
+
+      const expRes = await request('/api/experiments', 'POST', {
+        experiment_name: `SEC12 Exp ${rand}`,
+        lab_id: labId,
+        ar_qr_marker_id: testMarkerId,
+        theory_procedure_json: ['Theory Step'],
+        video_links: [{ id: 'vid-test-sec12', url: 'https://youtube.com/watch?v=123', title: 'Video Title', min_duration: 60 }],
+        checklist_items: ['Item 1']
+      }, adminCookies);
+      const expId = expRes.body?.experiment_id;
+      if (!expId) return { statusCode: 500, body: 'Failed to create experiment' };
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [branchId]);
+
+      const startRes = await request('/api/sessions/start', 'POST', { experiment_id: expId }, testStudentCookies);
+      const sessionId = startRes.body?.session?.session_id;
+
+      await request('/api/sessions/verify-aruco', 'POST', {
+        experiment_id: expId,
+        scanned_marker_id: testMarkerId
+      }, testStudentCookies);
+
+      const progressRes = await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'learning'
+      }, testStudentCookies);
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [testBranchIdRef.id]);
+
+      return progressRes;
     }
   );
 

@@ -226,12 +226,47 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
     const session = sessions[0];
 
     if (video_id && watched_seconds !== undefined) {
-      // Update video progress JSON
+      // 1. Fetch content version video links to validate ID and min_duration
+      const versions = await db.query(
+        'SELECT video_links FROM experiment_content_versions WHERE content_version_id = ?',
+        [session.content_version_id]
+      );
+      if (versions.length === 0) {
+        return res.status(404).json({ error: 'Content version not found.' });
+      }
+      const videoLinks = typeof versions[0].video_links === 'string'
+        ? JSON.parse(versions[0].video_links)
+        : (versions[0].video_links || []);
+
+      const video = videoLinks.find(v => v.id === video_id);
+      if (!video) {
+        return res.status(400).json({ error: 'Invalid video ID.' });
+      }
+
+      // 2. Validate format
+      let seconds = parseFloat(watched_seconds);
+      if (isNaN(seconds) || seconds < 0) {
+        return res.status(400).json({ error: 'watched_seconds must be a non-negative number.' });
+      }
+
+      // 3. Update progress with clamping to prevent spoofing jumps
       const progress = typeof session.current_video_progress === 'string'
         ? JSON.parse(session.current_video_progress)
         : (session.current_video_progress || {});
+
+      const prevProgress = parseFloat(progress[video_id] || '0');
       
-      progress[video_id] = watched_seconds;
+      // Limit the increment to at most 15 seconds per sync to prevent instant skips
+      if (seconds > prevProgress + 15) {
+        seconds = prevProgress + 15;
+      }
+
+      // Clamp progress to maximum required min_duration
+      if (seconds > video.min_duration) {
+        seconds = video.min_duration;
+      }
+
+      progress[video_id] = seconds;
 
       await db.query(
         'UPDATE student_sessions SET current_video_progress = ? WHERE session_id = ?',
@@ -245,6 +280,32 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
         if (!session.aruco_verified_at) {
           return res.status(400).json({ error: 'Cannot complete learning stage without verifying ArUco marker.' });
         }
+
+        // Verify every video meets its required min_duration
+        const versions = await db.query(
+          'SELECT video_links FROM experiment_content_versions WHERE content_version_id = ?',
+          [session.content_version_id]
+        );
+        if (versions.length === 0) {
+          return res.status(404).json({ error: 'Content version not found.' });
+        }
+        const videoLinks = typeof versions[0].video_links === 'string'
+          ? JSON.parse(versions[0].video_links)
+          : (versions[0].video_links || []);
+
+        const progress = typeof session.current_video_progress === 'string'
+          ? JSON.parse(session.current_video_progress)
+          : (session.current_video_progress || {});
+
+        for (const video of videoLinks) {
+          const watched = parseFloat(progress[video.id] || '0');
+          if (watched < video.min_duration) {
+            return res.status(400).json({
+              error: `Cannot complete learning stage. Required video "${video.title}" must be watched for at least ${video.min_duration} seconds.`
+            });
+          }
+        }
+
         await db.query('UPDATE student_sessions SET learning_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'visual') {
         if (!session.learning_stage_completed_at) {

@@ -23,13 +23,13 @@ services:
     environment:
       - PORT=5000
       - NODE_ENV=production
-      - JWT_ACCESS_SECRET=167b5b5b958b0441484764382afcbd6e7142a71d0f5089d5de7924ae4b04d72bac82a72a0f732955d5d79b79dfdf1fb474d0ebf77329afad28ca46162419722f
-      - JWT_REFRESH_SECRET=c0eed956190d54475a668519178258dc4a0c78e5c9241f885b50cdd895c43bbc4770f9e9597f34b511b0a3dfcff2c9062a4789455500811307c1bcbc5e526338
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-d94943fcfcb6c3ab876ad1d6ad49cb376e18eea36ac2f4c669877049a928ffb295d2cec760a741e59564c2dff60f6f9c908f9f9367f14930a5621a816ce27f7df479755}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-79a04b57aa2196b7b9e4690a563b9134c2604abd8464f2b3cc937d4ded49e5e089948be9bfd607d7927fb64b9b9d2d8e4774229b5a6a6a47a6c621949f9b156e8}
       - JWT_ACCESS_EXPIRY=15m
       - JWT_REFRESH_EXPIRY=7d
-      - DATABASE_URL=postgresql://postgres:securecomposedbpassword123@db:5432/postgres?sslmode=disable
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:securecomposedbpassword123@db:5432/postgres?sslmode=disable}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80
-      - MEDIA_SIGN_SECRET=mediasignkey123!
+      - MEDIA_SIGN_SECRET=${MEDIA_SIGN_SECRET:-mediasignkey123!}
     depends_on:
       - db
 
