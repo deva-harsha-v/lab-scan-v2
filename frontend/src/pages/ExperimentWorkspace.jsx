@@ -250,12 +250,28 @@ export default function ExperimentWorkspace() {
     }
   };
 
-  const handleCameraDetectedMarker = (detectedId) => {
+  const handleCameraDetectedMarker = async (detectedId) => {
     const expectedId = String(experiment?.ar_qr_marker_id || '01');
     const scannedIdStr = String(detectedId);
 
     if (scannedIdStr === expectedId) {
       setScanGatekeeperError('');
+
+      if (!isGhostMode && session?.session_id) {
+        try {
+          await apiFetch('/sessions/verify-aruco', {
+            method: 'POST',
+            body: JSON.stringify({
+              experiment_id: experimentId,
+              scanned_marker_id: parseInt(detectedId, 10)
+            })
+          });
+        } catch (err) {
+          setScanGatekeeperError(`Server verification failed: ${err.message}`);
+          return;
+        }
+      }
+
       setIsArUcoScanned(true);
       setShowScanGatekeeper(false);
       completeLearningStage();
@@ -1167,13 +1183,15 @@ export default function ExperimentWorkspace() {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button 
-                className="academic-btn btn-academic-primary"
-                style={{ width: '100%', padding: '10px 14px', fontSize: '12.5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                onClick={() => handleArUcoGatekeeperScan(experiment?.ar_qr_marker_id || '01')}
-              >
-                <ShieldCheck size={16} /> Simulate Camera Bench Scan (Marker #{experiment?.ar_qr_marker_id || '01'})
-              </button>
+              {import.meta.env.DEV && (
+                <button 
+                  className="academic-btn btn-academic-primary"
+                  style={{ width: '100%', padding: '10px 14px', fontSize: '12.5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                  onClick={() => handleArUcoGatekeeperScan(experiment?.ar_qr_marker_id || '01')}
+                >
+                  <ShieldCheck size={16} /> Simulate Camera Bench Scan (Marker #{experiment?.ar_qr_marker_id || '01'})
+                </button>
+              )}
               <button 
                 className="academic-btn btn-academic-secondary"
                 style={{ width: '100%', padding: '8px', fontSize: '12px' }}

@@ -514,6 +514,12 @@ async function runSuite() {
         return { statusCode: 500, body: 'Failed to retrieve or create session.' };
       }
 
+      // 4b. Student verifies ArUco marker
+      await request('/api/sessions/verify-aruco', 'POST', {
+        experiment_id: experimentId,
+        scanned_marker_id: auditMarkerId
+      }, testStudentCookies);
+
       // 5. Student completes learning stage
       await request('/api/sessions/progress', 'PUT', {
         session_id: sessionId,
@@ -612,6 +618,168 @@ async function runSuite() {
         session_id: sessionId,
         stage: 'complete'
       }, testStudentCookies);
+    }
+  );
+
+  await addResult('SEC-09', 'Session-stage progression - cannot complete learning stage without ArUco verification',
+    (res) => res.statusCode === 400 && res.body.error && res.body.error.includes('without verifying ArUco'),
+    async () => {
+      const loginRes = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = loginRes.cookies;
+
+      const exps = await db.query(`
+        SELECT e.experiment_id FROM experiments e
+        JOIN lab_branches lb ON lb.lab_id = e.lab_id
+        WHERE lb.branch_id = ? LIMIT 1
+      `, [testBranchIdRef.id]);
+      const expId = exps[0].experiment_id;
+
+      const existing = await db.query('SELECT session_id FROM student_sessions WHERE student_id = ? AND experiment_id = ?', [studentLogin.body.user.user_id, expId]);
+      if (existing.length > 0) {
+        await db.query('DELETE FROM student_checklist_progress WHERE student_session_id = ?', [existing[0].session_id]);
+        await db.query('DELETE FROM student_sessions WHERE session_id = ?', [existing[0].session_id]);
+      }
+
+      const startRes = await request('/api/sessions/start', 'POST', { experiment_id: expId }, testStudentCookies);
+      const sessionId = startRes.body?.session?.session_id;
+
+      return await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'learning'
+      }, testStudentCookies);
+    }
+  );
+
+  await addResult('SEC-10', 'Session-stage progression - cannot complete checklist stage without completing all items',
+    (res) => res.statusCode === 400 && res.body.error && res.body.error.includes('Some checklist items are not completed'),
+    async () => {
+      const loginRes = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = loginRes.cookies;
+
+      const branchRes = await request('/api/branches', 'POST', { name: `SEC10 Branch ${rand}` }, adminCookies);
+      const branchId = branchRes.body?.branch?.branch_id;
+      if (!branchId) return { statusCode: 500, body: 'Failed to create branch' };
+
+      const labRes = await request('/api/labs', 'POST', {
+        lab_name: `SEC10 Lab ${rand}`,
+        allowed_branches: [branchId]
+      }, adminCookies);
+      const labId = labRes.body?.lab?.lab_id;
+      if (!labId) return { statusCode: 500, body: 'Failed to create lab' };
+
+      const usedMarkers = await db.query('SELECT ar_qr_marker_id FROM experiments');
+      const usedSet = new Set(usedMarkers.map(m => m.ar_qr_marker_id));
+      let testMarkerId = 50;
+      while (usedSet.has(testMarkerId) && testMarkerId < 99) {
+        testMarkerId++;
+      }
+
+      const expRes = await request('/api/experiments', 'POST', {
+        experiment_name: `SEC10 Exp ${rand}`,
+        lab_id: labId,
+        ar_qr_marker_id: testMarkerId,
+        theory_procedure_json: ['Theory Step'],
+        video_links: [{ url: 'https://youtube.com/watch?v=123', title: 'Video Title' }],
+        checklist_items: ['Item 1', 'Item 2']
+      }, adminCookies);
+      const expId = expRes.body?.experiment_id;
+      if (!expId) return { statusCode: 500, body: 'Failed to create experiment' };
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [branchId]);
+
+      const startRes = await request('/api/sessions/start', 'POST', { experiment_id: expId }, testStudentCookies);
+      const sessionId = startRes.body?.session?.session_id;
+
+      await request('/api/sessions/verify-aruco', 'POST', {
+        experiment_id: expId,
+        scanned_marker_id: testMarkerId
+      }, testStudentCookies);
+
+      await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'learning'
+      }, testStudentCookies);
+
+      await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'visual'
+      }, testStudentCookies);
+
+      const progressRes = await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'checklist'
+      }, testStudentCookies);
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [testBranchIdRef.id]);
+
+      return progressRes;
+    }
+  );
+
+  await addResult('SEC-11', 'Checklist toggle - return 404 if checklist item or session does not exist',
+    (res) => res.statusCode === 404,
+    async () => {
+      const loginRes = await request('/api/auth/login', 'POST', studentCreds);
+      const testStudentCookies = loginRes.cookies;
+
+      const branchRes = await request('/api/branches', 'POST', { name: `SEC11 Branch ${rand}` }, adminCookies);
+      const branchId = branchRes.body?.branch?.branch_id;
+      if (!branchId) return { statusCode: 500, body: 'Failed to create branch' };
+
+      const labRes = await request('/api/labs', 'POST', {
+        lab_name: `SEC11 Lab ${rand}`,
+        allowed_branches: [branchId]
+      }, adminCookies);
+      const labId = labRes.body?.lab?.lab_id;
+      if (!labId) return { statusCode: 500, body: 'Failed to create lab' };
+
+      const usedMarkers = await db.query('SELECT ar_qr_marker_id FROM experiments');
+      const usedSet = new Set(usedMarkers.map(m => m.ar_qr_marker_id));
+      let testMarkerId = 60;
+      while (usedSet.has(testMarkerId) && testMarkerId < 99) {
+        testMarkerId++;
+      }
+
+      const expRes = await request('/api/experiments', 'POST', {
+        experiment_name: `SEC11 Exp ${rand}`,
+        lab_id: labId,
+        ar_qr_marker_id: testMarkerId,
+        theory_procedure_json: ['Theory Step'],
+        video_links: [{ url: 'https://youtube.com/watch?v=123', title: 'Video Title' }],
+        checklist_items: ['Item 1']
+      }, adminCookies);
+      const expId = expRes.body?.experiment_id;
+      if (!expId) return { statusCode: 500, body: 'Failed to create experiment' };
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [branchId]);
+
+      const startRes = await request('/api/sessions/start', 'POST', { experiment_id: expId }, testStudentCookies);
+      const sessionId = startRes.body?.session?.session_id;
+
+      await request('/api/sessions/verify-aruco', 'POST', {
+        experiment_id: expId,
+        scanned_marker_id: testMarkerId
+      }, testStudentCookies);
+
+      await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'learning'
+      }, testStudentCookies);
+
+      await request('/api/sessions/progress', 'PUT', {
+        session_id: sessionId,
+        stage: 'visual'
+      }, testStudentCookies);
+
+      const checklistRes = await request('/api/sessions/checklist', 'PUT', {
+        session_id: sessionId,
+        checklist_item_id: crypto.randomUUID(),
+        is_completed: true
+      }, testStudentCookies);
+
+      await db.query("UPDATE users SET branch_id = ? WHERE username = 'student1'", [testBranchIdRef.id]);
+
+      return checklistRes;
     }
   );
 

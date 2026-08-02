@@ -3,7 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../config/db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { validateBody, sessionStartSchema, sessionChecklistItemSchema } = require('../utils/validators');
+const { validateBody, sessionStartSchema, sessionChecklistItemSchema, sessionVerifyArucoSchema } = require('../utils/validators');
 const { logAction } = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
 
@@ -122,6 +122,49 @@ router.post('/start', sessionLimiter, authenticateToken, requireRole(['student']
   }
 });
 
+// POST /api/sessions/verify-aruco - Verify ArUco marker scanned on lab bench
+router.post('/verify-aruco', sessionLimiter, authenticateToken, requireRole(['student']), validateBody(sessionVerifyArucoSchema), async (req, res) => {
+  const { experiment_id, scanned_marker_id } = req.body;
+  const studentId = req.user.user_id;
+
+  try {
+    // 1. Verify the experiment has the expected marker ID
+    const exps = await db.query('SELECT ar_qr_marker_id FROM experiments WHERE experiment_id = ?', [experiment_id]);
+    if (exps.length === 0) {
+      return res.status(404).json({ error: 'Experiment not found.' });
+    }
+
+    const expectedMarkerId = exps[0].ar_qr_marker_id;
+    if (expectedMarkerId !== scanned_marker_id) {
+      return res.status(400).json({ error: `Wrong marker scanned. Expected ArUco Marker #${expectedMarkerId}, got #${scanned_marker_id}.` });
+    }
+
+    // 2. Fetch the active session
+    const sessions = await db.query(
+      'SELECT session_id FROM student_sessions WHERE student_id = ? AND experiment_id = ? AND session_completed_at IS NULL',
+      [studentId, experiment_id]
+    );
+    if (sessions.length === 0) {
+      return res.status(404).json({ error: 'No active session found for this experiment.' });
+    }
+    const sessionId = sessions[0].session_id;
+
+    // 3. Mark ArUco verified
+    await db.query(
+      'UPDATE student_sessions SET aruco_verified_at = CURRENT_TIMESTAMP WHERE session_id = ?',
+      [sessionId]
+    );
+
+    // 4. Log action
+    await logAction(studentId, 'VERIFY_ARUCO', 'SESSION', sessionId, { experiment_id, scanned_marker_id });
+
+    res.json({ message: 'ArUco marker verified successfully.' });
+  } catch (err) {
+    console.error('Error verifying ArUco marker:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
 // GET /api/sessions/active/:experimentId - Get active session status for a student
 router.get('/active/:experimentId', authenticateToken, requireRole(['student']), async (req, res) => {
   const experimentId = req.params.experimentId;
@@ -199,6 +242,9 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
     if (stage) {
       const now = new Date();
       if (stage === 'learning') {
+        if (!session.aruco_verified_at) {
+          return res.status(400).json({ error: 'Cannot complete learning stage without verifying ArUco marker.' });
+        }
         await db.query('UPDATE student_sessions SET learning_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'visual') {
         if (!session.learning_stage_completed_at) {
@@ -209,6 +255,13 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
         if (!session.visual_stage_completed_at) {
           return res.status(400).json({ error: 'Cannot complete checklist stage before completing visual stage.' });
         }
+        const uncompleted = await db.query(
+          'SELECT COUNT(*) as count FROM student_checklist_progress WHERE student_session_id = ? AND is_completed = false',
+          [session_id]
+        );
+        if (parseInt(uncompleted[0].count, 10) > 0) {
+          return res.status(400).json({ error: 'Cannot complete checklist stage. Some checklist items are not completed.' });
+        }
         await db.query('UPDATE student_sessions SET checklist_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'complete') {
         if (!session.checklist_completed_at) {
@@ -216,7 +269,7 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
         }
         await db.query('UPDATE student_sessions SET session_completed_at = ? WHERE session_id = ?', [now, session_id]);
       }
-      
+
       // Log audit event
       await logAction(studentId, 'COMPLETE_STAGE', 'SESSION', session_id, { stage, experiment_id: session.experiment_id });
     }
@@ -242,6 +295,14 @@ router.put('/checklist', sessionLimiter, authenticateToken, requireRole(['studen
 
     if (!sessions[0].visual_stage_completed_at) {
       return res.status(400).json({ error: 'Cannot update checklist progress before completing visual stage.' });
+    }
+
+    const itemCheck = await db.query(
+      'SELECT 1 FROM student_checklist_progress WHERE student_session_id = ? AND checklist_item_id = ?',
+      [session_id, checklist_item_id]
+    );
+    if (itemCheck.length === 0) {
+      return res.status(404).json({ error: 'Checklist item not found for this session.' });
     }
 
     const completedAt = is_completed ? new Date() : null;
