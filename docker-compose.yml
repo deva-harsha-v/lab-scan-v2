@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: securecomposedbpassword123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insecure-composedb-password}
     ports:
       - "5432:5432"
     volumes:
@@ -27,7 +27,7 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-insecure-dev-jwt-refresh-secret-key-32-characters-minimum}
       - JWT_ACCESS_EXPIRY=15m
       - JWT_REFRESH_EXPIRY=7d
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:insecurecomposedbpassword@db:5432/postgres?sslmode=disable}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:insecure-composedb-password@db:5432/postgres?sslmode=disable}
       - ALLOWED_ORIGINS=http://localhost,http://localhost:80
       - MEDIA_SIGN_SECRET=${MEDIA_SIGN_SECRET:-insecure-dev-media-signing-secret}
     depends_on:
