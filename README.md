@@ -128,3 +128,13 @@ cd backend
 npm test
 ```
 The suite verifies password complexity rules, student registration constraints, database shims, and JWT signature security.
+
+---
+
+## 7. Security Policy & Audit Exceptions
+
+Running `npm audit` on the `frontend` workspace will flag a high-severity advisory on the `react-router` dependency (GHSA-qwww-vcr4-c8h2 - RSC Mode CSRF Bypass).
+
+This finding is **non-applicable (zero risk)** for this project. The LabScan console is compiled as a static client-side SPA with zero React Server Components (RSC) or Server-Side Rendering (SSR) runtime. 
+
+For full details, please refer to [SECURITY.md](file:///C:/Users/devah/Downloads/labscan-ag/SECURITY.md) in the root directory.
