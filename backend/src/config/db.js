@@ -13,11 +13,23 @@ let pool;
 function getPool() {
   if (pool) return pool;
 
-  // Supabase Free Tier direct connection limits are capped around 60.
-  // Standard direct connection uses port 5432. We default pool size to 20.
-  // For production high-concurrency configurations, point DATABASE_URL to 
-  // Supabase's transaction pooler (port 6543, transaction mode).
-  const isRemote = connectionString || (process.env.DB_HOST && process.env.DB_HOST !== '127.0.0.1' && process.env.DB_HOST !== 'localhost');
+  // Parse target database hostname to determine if the connection is remote
+  let dbHost = process.env.DB_HOST || '127.0.0.1';
+  if (connectionString) {
+    try {
+      const urlObj = new URL(connectionString);
+      if (urlObj.hostname) {
+        dbHost = urlObj.hostname;
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+
+  // Treat local docker-compose services ('db', 'postgres') and loopbacks as local
+  const localHosts = ['localhost', '127.0.0.1', 'db', 'postgres'];
+  const isRemote = dbHost && !localHosts.includes(dbHost.toLowerCase());
+
 
   const poolConfig = {
     max: parseInt(process.env.DB_POOL_MAX || '20', 10),
