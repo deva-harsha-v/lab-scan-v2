@@ -690,7 +690,7 @@ export default function Landing() {
             margin-bottom: -50px !important;
           }
         }
-        @media (max-width: 540px) {
+        @media (max-width: 640px) {
           nav {
             flex-direction: column !important;
             gap: 12px !important;
@@ -700,6 +700,7 @@ export default function Landing() {
           .nav-logo {
             justify-content: center !important;
             margin-bottom: 2px !important;
+            width: 100% !important;
           }
           .nav-theme-toggle {
             position: absolute !important;
@@ -708,16 +709,16 @@ export default function Landing() {
           }
           .nav-cta {
             width: 100% !important;
-            justify-content: center !important;
+            flex-direction: column !important;
             gap: 8px !important;
           }
           .nav-signin, .nav-admin-signin {
-            flex: 1 !important;
-            min-width: 0 !important;
+            width: 100% !important;
             text-align: center !important;
-            padding: 8px 12px !important;
-            font-size: 11px !important;
+            padding: 10px 16px !important;
+            font-size: 12px !important;
             white-space: nowrap !important;
+            border-radius: 10px !important;
           }
         }
         @media (max-width: 480px) {
