@@ -218,12 +218,16 @@
   padding: 0;
 }
 
+html, body {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+}
+
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-family);
   min-height: 100vh;
-  overflow-x: hidden;
   line-height: 1.5;
 }
 

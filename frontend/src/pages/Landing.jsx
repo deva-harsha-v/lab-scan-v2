@@ -691,6 +691,9 @@ export default function Landing() {
           }
         }
         @media (max-width: 640px) {
+          #hero-section {
+            padding-top: 180px !important;
+          }
           nav {
             flex-direction: column !important;
             gap: 12px !important;
@@ -740,7 +743,7 @@ export default function Landing() {
         }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', transition: 'background 0.3s ease' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', transition: 'background 0.3s ease', overflowX: 'hidden', maxWidth: '100%' }}>
 
         {/* Ambient background glows */}
         <div className="ambient-glow-canvas">
@@ -826,6 +829,7 @@ export default function Landing() {
 
         {/* ── HERO ───────────────────────────────────────────────────────── */}
         <section 
+          id="hero-section"
           ref={heroRef}
           onMouseMove={handleHeroMouseMove}
           onMouseLeave={handleHeroMouseLeave}
@@ -870,7 +874,7 @@ export default function Landing() {
               
             </div>
 
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 10px' }}>
               {[
                 { label: 'Admin Configuration', color: 'var(--accent-blue)' },
                 { label: 'Ghost Telemetry',    color: '#a78bfa' },
