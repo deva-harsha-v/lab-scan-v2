@@ -690,6 +690,30 @@ export default function Landing() {
             margin-bottom: -50px !important;
           }
         }
+        @media (max-width: 540px) {
+          nav {
+            flex-direction: column !important;
+            gap: 12px !important;
+            align-items: center !important;
+            padding: 12px 16px !important;
+          }
+          .nav-logo {
+            justify-content: center !important;
+            margin-bottom: 2px !important;
+          }
+          .nav-cta {
+            width: 100% !important;
+            justify-content: center !important;
+            gap: 6px !important;
+          }
+          .nav-signin, .nav-admin-signin {
+            flex: 1 !important;
+            text-align: center !important;
+            padding: 8px 12px !important;
+            font-size: 11px !important;
+            white-space: nowrap !important;
+          }
+        }
         @media (max-width: 480px) {
           .scanner-wrapper {
             transform: scale(0.6) !important;
@@ -740,6 +764,7 @@ export default function Landing() {
         >
           {/* Logo */}
           <div
+            className="nav-logo"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
           >
@@ -763,7 +788,7 @@ export default function Landing() {
           </div>
 
           {/* CTA */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <ThemeToggle size="sm" />
             <button
               className="glowbtn nav-signin"
