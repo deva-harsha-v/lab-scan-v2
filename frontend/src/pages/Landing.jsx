@@ -315,6 +315,11 @@ function BentoCard3D({ children, style = {} }) {
     setTilt({ x: 0, y: 0, shine: { x: 50, y: 50 } });
   }, []);
 
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const transformValue = isMobile
+    ? 'none'
+    : `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${tilt.x !== 0 || tilt.y !== 0 ? 1.02 : 1})`;
+
   return (
     <div
       ref={cardRef}
@@ -325,9 +330,9 @@ function BentoCard3D({ children, style = {} }) {
         background: 'var(--glass-bg)',
         border: '1px solid var(--border-color)',
         transformStyle: 'preserve-3d',
-        transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${tilt.x !== 0 || tilt.y !== 0 ? 1.02 : 1})`,
+        transform: transformValue,
         transition: tilt.x === 0 ? 'transform 0.5s cubic-bezier(0.16,1,0.3,1)' : 'transform 0.1s ease',
-        boxShadow: tilt.x !== 0 ? 'var(--glass-shadow)' : 'none',
+        boxShadow: (tilt.x !== 0 && !isMobile) ? 'var(--glass-shadow)' : 'none',
         overflow: 'hidden',
         position: 'relative',
         ...style
@@ -413,7 +418,7 @@ function LiveSessionTerminal() {
         ))}
       </div>
 
-      <div style={{
+      <div className="live-terminal" style={{
         width: '100%',
         background: 'var(--glass-bg)',
         border: '1px solid var(--border-color)',
@@ -502,7 +507,7 @@ function LiveSessionTerminal() {
               {STEPS.map((step, i) => (
                 <React.Fragment key={i}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
-                    <div style={{
+                    <div className="step-circle" style={{
                       width: 28, height: 28, borderRadius: '50%',
                       background: completed(i) ? step.color : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
                       border: `2px solid ${completed(i) ? step.color : current(i) ? step.color : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
@@ -516,7 +521,7 @@ function LiveSessionTerminal() {
                         ? <span style={{ animation: 'radialGlow 1.5s infinite' }}>●</span>
                         : '○'}
                     </div>
-                    <div style={{
+                    <div className="step-phase" style={{
                       fontSize: 7, fontFamily: font.mono,
                       color: current(i) ? step.color : 'var(--text-muted)',
                       textAlign: 'center', maxWidth: 50, lineHeight: 1.3, transition: 'color 0.3s'
@@ -525,7 +530,7 @@ function LiveSessionTerminal() {
                     </div>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <div style={{
+                    <div className="step-line" style={{
                       flex: 1, height: 1, maxWidth: 24,
                       background: completed(i)
                         ? `linear-gradient(90deg, ${STEPS[i].color}, ${STEPS[i + 1].color})`
@@ -640,6 +645,68 @@ export default function Landing() {
         @keyframes gridFade { 0%,100%{opacity:0.03;}50%{opacity:0.06;} }
         @keyframes slideIn { from{opacity:0;transform:translateX(-20px);}to{opacity:1;transform:translateX(0);} }
         @keyframes countUp { from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);} }
+
+        @media (max-width: 1024px) {
+          .nav-desktop { display: none !important; }
+        }
+        @media (max-width: 768px) {
+          nav {
+            padding: 12px 16px !important;
+          }
+          .nav-signin, .nav-admin-signin {
+            padding: 6px 12px !important;
+            font-size: 10px !important;
+            border-radius: 8px !important;
+          }
+          .live-terminal {
+            transform: none !important;
+            padding: 16px !important;
+            border-radius: 16px !important;
+          }
+          .live-terminal .step-circle {
+            width: 20px !important;
+            height: 20px !important;
+            font-size: 10px !important;
+          }
+          .live-terminal .step-line {
+            max-width: 12px !important;
+          }
+          .live-terminal .step-phase {
+            font-size: 6px !important;
+            max-width: 35px !important;
+          }
+          .showcase-card {
+            transform: none !important;
+            padding: 20px !important;
+            min-height: auto !important;
+          }
+          #workflow svg {
+            display: none !important;
+          }
+          .scanner-wrapper {
+            transform: scale(0.7) !important;
+            height: 320px !important;
+            margin-top: -50px !important;
+            margin-bottom: -50px !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .scanner-wrapper {
+            transform: scale(0.6) !important;
+            height: 280px !important;
+            margin-top: -70px !important;
+            margin-bottom: -70px !important;
+          }
+          .footer-bottom {
+            flex-direction: column !important;
+            gap: 10px !important;
+            text-align: center !important;
+          }
+          .final-cta-card {
+            padding: 32px 16px !important;
+            border-radius: 20px !important;
+          }
+        }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', position: 'relative', transition: 'background 0.3s ease' }}>
@@ -683,7 +750,7 @@ export default function Landing() {
                 letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1
               }}
             >
-              LabScan <span style={{ fontSize: '0.75rem', fontFamily: font.mono, color: 'var(--accent-blue)', verticalAlign: 'super' }}>v2</span>
+              LabScan
             </span>
           </div>
 
@@ -854,7 +921,7 @@ export default function Landing() {
             </ScrollReveal>
 
             <ScrollReveal direction="right">
-              <div style={{
+              <div className="showcase-card" style={{
                 background: 'var(--glass-bg)', border: '1px solid var(--border-color)', borderRadius: 24,
                 padding: 40, minHeight: 380, display: 'flex', flexDirection: 'column', justifyContent: 'center',
                 position: 'relative', overflow: 'hidden',
@@ -1004,7 +1071,7 @@ export default function Landing() {
               </div>
             </ScrollReveal>
             <ScrollReveal direction="right">
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 460 }}>
+              <div className="scanner-wrapper" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 460 }}>
                 <OrbitalScanner />
               </div>
             </ScrollReveal>
@@ -1145,7 +1212,7 @@ export default function Landing() {
           <div style={{ position: 'absolute', bottom: '15%', left: '50%', transform: 'translateX(-50%)', width: 400, height: 400, background: 'radial-gradient(circle, rgba(56,189,248,0.08) 0%, transparent 70%)', filter: 'blur(60px)', pointerEvents: 'none' }} />
 
           <ScrollReveal>
-            <div style={{
+            <div className="final-cta-card" style={{
               display: 'inline-block', padding: '64px 40px',
               border: '1px solid var(--border-color)', borderRadius: 32,
               background: 'linear-gradient(180deg, rgba(56,189,248,0.025), transparent)',
@@ -1168,7 +1235,7 @@ export default function Landing() {
         <footer style={{ width: '100%', borderTop: '1px solid var(--border-color)', padding: '40px 24px', display: 'flex', flexDirection: 'column', gap: 24, background: isDark ? '#01030a' : '#f1f5f9', position: 'relative', zIndex: 1, transition: 'background 0.3s ease' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 20 }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary)', fontFamily: "'Syne', sans-serif" }}>LabScan v2</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--text-primary)', fontFamily: "'Syne', sans-serif" }}>LabScan</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontFamily: font.mono }}>EVENT-DRIVEN LAB LEARNING PLATFORM</div>
             </div>
             <div style={{ display: 'flex', gap: 40 }}>
@@ -1185,7 +1252,7 @@ export default function Landing() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: 20, fontSize: 11, fontFamily: font.mono, color: 'var(--text-muted)' }}>
+          <div className="footer-bottom" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: 20, fontSize: 11, fontFamily: font.mono, color: 'var(--text-muted)' }}>
             <span>© 2026 LabScan. All rights reserved.</span>
             <span>Built by Deva Harsha Veerla</span>
           </div>
