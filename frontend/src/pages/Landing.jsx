@@ -693,28 +693,31 @@ export default function Landing() {
         @media (max-width: 540px) {
           nav {
             flex-direction: column !important;
-            gap: 10px !important;
+            gap: 12px !important;
             align-items: center !important;
-            padding: 10px 12px !important;
+            padding: 12px 16px !important;
           }
           .nav-logo {
             justify-content: center !important;
             margin-bottom: 2px !important;
           }
+          .nav-theme-toggle {
+            position: absolute !important;
+            top: 12px !important;
+            right: 16px !important;
+          }
           .nav-cta {
             width: 100% !important;
             justify-content: center !important;
-            gap: 4px !important;
+            gap: 8px !important;
           }
           .nav-signin, .nav-admin-signin {
             flex: 1 !important;
             min-width: 0 !important;
             text-align: center !important;
-            padding: 8px 8px !important;
-            font-size: 10px !important;
+            padding: 8px 12px !important;
+            font-size: 11px !important;
             white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
           }
         }
         @media (max-width: 480px) {
@@ -792,7 +795,7 @@ export default function Landing() {
 
           {/* CTA */}
           <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <ThemeToggle size="sm" />
+            <div className="nav-theme-toggle"><ThemeToggle size="sm" /></div>
             <button
               className="glowbtn nav-signin"
               onClick={() => navigate('/login')}
