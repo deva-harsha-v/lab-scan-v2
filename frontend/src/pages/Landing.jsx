@@ -693,9 +693,9 @@ export default function Landing() {
         @media (max-width: 540px) {
           nav {
             flex-direction: column !important;
-            gap: 12px !important;
+            gap: 10px !important;
             align-items: center !important;
-            padding: 12px 16px !important;
+            padding: 10px 12px !important;
           }
           .nav-logo {
             justify-content: center !important;
@@ -704,14 +704,17 @@ export default function Landing() {
           .nav-cta {
             width: 100% !important;
             justify-content: center !important;
-            gap: 6px !important;
+            gap: 4px !important;
           }
           .nav-signin, .nav-admin-signin {
             flex: 1 !important;
+            min-width: 0 !important;
             text-align: center !important;
-            padding: 8px 12px !important;
-            font-size: 11px !important;
+            padding: 8px 8px !important;
+            font-size: 10px !important;
             white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
           }
         }
         @media (max-width: 480px) {
