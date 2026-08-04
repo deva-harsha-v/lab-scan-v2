@@ -1719,7 +1719,7 @@ export default function ExperimentWorkspace() {
                       ) : (
                         <iframe 
                           loading="lazy"
-                          src={parseEmbedVideoUrl(activeVideo).includes('drive.google.com') 
+                          src={(parseEmbedVideoUrl(activeVideo).includes('drive.google.com') || parseEmbedVideoUrl(activeVideo).includes('docs.google.com')) 
                             ? parseEmbedVideoUrl(activeVideo) 
                             : `${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`
                           }
@@ -1727,8 +1727,7 @@ export default function ExperimentWorkspace() {
                           frameBorder="0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                           allowFullScreen
-                          sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
-                          style={{ width: '100%', height: '100%' }}
+                          style={{ width: '100%', height: '100%', border: '0', display: 'block' }}
                         />
                       )}
                     </div>
