@@ -39,6 +39,7 @@ export default function ExperimentWorkspace() {
   const [isArUcoScanned, setIsArUcoScanned] = useState(searchParams.get('scanned') === 'true');
   const [showScanGatekeeper, setShowScanGatekeeper] = useState(false);
   const [scanGatekeeperError, setScanGatekeeperError] = useState('');
+  const [scanSuccess, setScanSuccess] = useState(false);
 
   // Video Player states
   const [activeVideo, setActiveVideo] = useState(null);
@@ -246,8 +247,8 @@ export default function ExperimentWorkspace() {
   };
 
   // Mark Learning Stage Completed (Student only)
-  const completeLearningStage = async () => {
-    if (!isArUcoScanned && !isGhostMode) {
+  const completeLearningStage = async (skipArucoCheck = false) => {
+    if (!skipArucoCheck && !isArUcoScanned && !isGhostMode) {
       setShowScanGatekeeper(true);
       return;
     }
@@ -260,6 +261,8 @@ export default function ExperimentWorkspace() {
         method: 'PUT',
         body: JSON.stringify({ session_id: session.session_id, stage: 'learning' })
       });
+      const data = await apiFetch(`/sessions/active/${experimentId}`);
+      setSession(data.session);
       setActiveStage('visual');
     } catch (err) {
       alert(err.message);
@@ -289,8 +292,12 @@ export default function ExperimentWorkspace() {
       }
 
       setIsArUcoScanned(true);
-      setShowScanGatekeeper(false);
-      completeLearningStage();
+      setScanSuccess(true);
+      setTimeout(() => {
+        setScanSuccess(false);
+        setShowScanGatekeeper(false);
+        completeLearningStage(true);
+      }, 1200);
     } else {
       setScanGatekeeperError(`Wrong Marker Scanned! You scanned ArUco Marker #${scannedIdStr}, but your lab bench requires ArUco Marker #${expectedId}.`);
     }
@@ -1189,7 +1196,26 @@ export default function ExperimentWorkspace() {
 
             {/* Live Camera Feed Scanner Component */}
             <div style={{ width: '100%', marginBottom: '16px' }}>
-              <ArucoScanner autoStart={true} onDetected={handleCameraDetectedMarker} />
+              {scanSuccess ? (
+                <div style={{
+                  height: '240px', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(16, 185, 129, 0.1)', border: '2px solid var(--success-emerald)',
+                  borderRadius: '12px', color: 'var(--success-emerald)'
+                }}>
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: 'spring', stiffness: 200 }}
+                  >
+                    <CheckCircle2 size={54} />
+                  </motion.div>
+                  <p style={{ marginTop: '12px', fontWeight: 700, fontSize: '15px' }}>Marker Verified Successfully!</p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>Unlocking visual bench trials...</p>
+                </div>
+              ) : (
+                <ArucoScanner autoStart={true} onDetected={handleCameraDetectedMarker} />
+              )}
             </div>
 
             {scanGatekeeperError && (
