@@ -112,7 +112,8 @@ export async function apiFetch(endpoint, options = {}) {
                   isLoggingOut = true;
                   await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
                   clearSession(true); // Skip server logout since we just called it above
-                  const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
+                  const isAdmin = window.location.hash.includes('/admin') || window.location.pathname.startsWith('/admin');
+                  const redirectPath = isAdmin ? '/#/admin/login' : '/#/login';
                   window.location.href = redirectPath;
                 }
                 return new Promise(() => {}); // Return a pending promise so the calling page stops processing during redirect
