@@ -82,7 +82,8 @@ app.use((req, res, next) => {
   }
 
   const path = req.path;
-  if (path.endsWith('/login') || path.endsWith('/refresh') || path.endsWith('/logout')) {
+  const cleanPath = path.replace(/\/$/, '');
+  if (cleanPath.endsWith('/login') || cleanPath.endsWith('/refresh') || cleanPath.endsWith('/logout')) {
     return next();
   }
 
