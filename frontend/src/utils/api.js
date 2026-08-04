@@ -115,6 +115,7 @@ export async function apiFetch(endpoint, options = {}) {
                   const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
                   window.location.href = redirectPath;
                 }
+                return new Promise(() => {}); // Return a pending promise so the calling page stops processing during redirect
               }
               throw new Error(`Session refresh failed with status ${refreshResponse.status}`);
             }

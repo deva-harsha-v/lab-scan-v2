@@ -42,7 +42,8 @@ const moderateLimiter = rateLimit({
 // Helper to set HttpOnly cookies for JWTs and CSRF token
 function setAuthCookies(res, user, accessToken, refreshToken) {
   const isProd = process.env.NODE_ENV === 'production';
-  const sameSite = process.env.COOKIE_SAMESITE || 'Lax';
+  const sameSite = process.env.COOKIE_SAMESITE || (isProd ? 'None' : 'Lax');
+  const sameSiteLower = sameSite.toLowerCase();
   const domain = process.env.COOKIE_DOMAIN || undefined;
 
   // Generate a random CSRF token
@@ -50,7 +51,7 @@ function setAuthCookies(res, user, accessToken, refreshToken) {
 
   const cookieOptions = {
     secure: isProd,
-    sameSite: sameSite === 'None' ? 'none' : (sameSite === 'Strict' ? 'strict' : 'lax'),
+    sameSite: sameSiteLower === 'none' ? 'none' : (sameSiteLower === 'strict' ? 'strict' : 'lax'),
     domain: domain
   };
 

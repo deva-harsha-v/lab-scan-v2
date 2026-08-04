@@ -82,7 +82,7 @@ app.use((req, res, next) => {
   }
 
   const path = req.path;
-  if (path === '/api/auth/login' || path === '/api/auth/refresh' || path === '/api/auth/logout') {
+  if (path.endsWith('/login') || path.endsWith('/refresh') || path.endsWith('/logout')) {
     return next();
   }
 
