@@ -181,6 +181,66 @@ router.get('/active/:experimentId', authenticateToken, requireRole(['student']),
     }
 
     const session = sessions[0];
+
+    // Auto-update / sync session to the latest content version if the admin has updated the experiment
+    if (!session.session_completed_at) {
+      const latestVersions = await db.query(
+        'SELECT content_version_id FROM experiment_content_versions WHERE experiment_id = ? ORDER BY version_number DESC LIMIT 1',
+        [experimentId]
+      );
+      if (latestVersions.length > 0 && latestVersions[0].content_version_id !== session.content_version_id) {
+        const latestVersionId = latestVersions[0].content_version_id;
+
+        await db.executeTransaction(async (conn) => {
+          // 1. Update session to the latest content version
+          await conn.query(
+            'UPDATE student_sessions SET content_version_id = ? WHERE session_id = ?',
+            [latestVersionId, session.session_id]
+          );
+
+          // 2. Fetch new version checklist items
+          const [newChecklist] = await conn.query(
+            'SELECT checklist_item_id FROM checklist_items WHERE content_version_id = ?',
+            [latestVersionId]
+          );
+
+          // 3. Fetch old checklist progress text for mapping
+          const [oldChecklist] = await conn.query(
+            `SELECT ci.item_text, scp.is_completed, scp.completed_at
+             FROM checklist_items ci
+             JOIN student_checklist_progress scp ON ci.checklist_item_id = scp.checklist_item_id
+             WHERE scp.student_session_id = ?`,
+            [session.session_id]
+          );
+
+          // 4. Delete old progress states
+          await conn.query(
+            'DELETE FROM student_checklist_progress WHERE student_session_id = ?',
+            [session.session_id]
+          );
+
+          // 5. Populate new progress states mapping matching text
+          for (const item of newChecklist) {
+            const [newItemDetails] = await conn.query(
+              'SELECT item_text FROM checklist_items WHERE checklist_item_id = ?',
+              [item.checklist_item_id]
+            );
+            const oldMatch = oldChecklist.find(oc => oc.item_text === newItemDetails[0].item_text);
+            const isCompleted = oldMatch ? oldMatch.is_completed : false;
+            const completedAt = oldMatch ? oldMatch.completed_at : null;
+
+            await conn.query(
+              `INSERT INTO student_checklist_progress 
+               (student_session_id, checklist_item_id, is_completed, completed_at) 
+               VALUES (?, ?, ?, ?)`,
+              [session.session_id, item.checklist_item_id, isCompleted, completedAt]
+            );
+          }
+        });
+
+        session.content_version_id = latestVersionId;
+      }
+    }
     
     // Parse progress JSON
     session.current_video_progress = typeof session.current_video_progress === 'string'
