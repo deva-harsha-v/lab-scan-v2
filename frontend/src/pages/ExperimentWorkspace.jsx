@@ -108,7 +108,11 @@ export default function ExperimentWorkspace() {
 
           let activeSession;
           try {
-            const data = await apiFetch(`/sessions/active/${experimentId}?_t=${Date.now()}`);
+            const sessId = searchParams.get('sessionId');
+            const url = sessId 
+              ? `/sessions/active/${experimentId}?sessionId=${sessId}&_t=${Date.now()}` 
+              : `/sessions/active/${experimentId}?_t=${Date.now()}`;
+            const data = await apiFetch(url);
             activeSession = data.session;
             setChecklistItems(data.checklist || []);
           } catch (e) {

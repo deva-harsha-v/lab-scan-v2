@@ -584,10 +584,14 @@ export default function StudentDashboard() {
                         if (item.session_completed_at) statusText = 'Completed';
                         else if (item.session_id) statusText = 'In Progress';
 
+                        const verNum = item.session_version_number || item.latest_version_number || 1;
+
                         return (
-                          <div key={item.experiment_id} className="bento-list-row">
+                          <div key={item.session_id ? item.session_id : `pending-${item.experiment_id}-${verNum}`} className="bento-list-row">
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                              <strong style={{ color: 'var(--text-primary)' }}>{item.experiment_name}</strong>
+                              <strong style={{ color: 'var(--text-primary)' }}>
+                                {item.experiment_name} <span style={{ fontSize: '11px', color: 'var(--accent-blue)', opacity: 0.8 }}>(V{verNum})</span>
+                              </strong>
                               <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>{item.lab_name}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -596,9 +600,15 @@ export default function StudentDashboard() {
                                 className="academic-btn btn-academic-primary pill" 
                                 style={{ padding: '6px 12px', fontSize: '12px' }}
                                 disabled={startingExpId === item.experiment_id}
-                                onClick={() => handleStartExperiment(item.experiment_id)}
+                                onClick={() => {
+                                  if (item.session_id) {
+                                    navigate(`/experiment/${item.experiment_id}?sessionId=${item.session_id}`);
+                                  } else {
+                                    handleStartExperiment(item.experiment_id);
+                                  }
+                                }}
                               >
-                                {startingExpId === item.experiment_id ? 'Launching...' : (statusText === 'Completed' ? 'Review' : 'Resume')}
+                                {startingExpId === item.experiment_id ? 'Launching...' : (statusText === 'Completed' ? 'Review' : (statusText === 'In Progress' ? 'Resume' : 'Start'))}
                               </button>
                             </div>
                           </div>
@@ -660,19 +670,22 @@ export default function StudentDashboard() {
                   <h3 style={{ margin: '0 0 14px', fontSize: '16px', fontWeight: 700 }}>Completed Submissions</h3>
                   {completedExperiments.length > 0 ? (
                     <div className="bento-list-stack">
-                      {completedExperiments.map(item => (
-                        <div key={item.experiment_id} className="bento-list-row" style={{ borderColor: 'rgba(52, 211, 153, 0.15)' }}>
-                          <div>
-                            <strong>{item.experiment_name}</strong>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              Signoff Date: {new Date(item.session_completed_at).toLocaleDateString()}
+                      {completedExperiments.map(item => {
+                        const verNum = item.session_version_number || item.latest_version_number || 1;
+                        return (
+                          <div key={item.session_id ? `comp-${item.session_id}` : `comp-exp-${item.experiment_id}-${verNum}`} className="bento-list-row" style={{ borderColor: 'rgba(52, 211, 153, 0.15)' }}>
+                            <div>
+                              <strong>{item.experiment_name} <span style={{ fontSize: '11px', color: 'var(--accent-green)', opacity: 0.8 }}>(V{verNum})</span></strong>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                Signoff Date: {new Date(item.session_completed_at).toLocaleDateString()}
+                              </div>
                             </div>
+                            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-green)' }}>
+                              ✓ VERIFIED RECORD
+                            </span>
                           </div>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-green)' }}>
-                            ✓ VERIFIED RECORD
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
@@ -784,10 +797,14 @@ export default function StudentDashboard() {
                                     if (exp.session_completed_at) statusText = 'Completed';
                                     else if (exp.session_id) statusText = 'In Progress';
 
+                                    const verNum = exp.session_version_number || exp.latest_version_number || 1;
+
                                     return (
-                                      <div key={exp.experiment_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                      <div key={exp.session_id ? exp.session_id : `drawer-pending-${exp.experiment_id}-${verNum}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                                         <div style={{ textStyle: 'left', textAlign: 'left' }}>
-                                          <strong style={{ fontSize: '13.5px', color: 'var(--text-primary)' }}>{exp.experiment_name}</strong>
+                                          <strong style={{ fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                                            {exp.experiment_name} <span style={{ fontSize: '11px', color: 'var(--accent-blue)', opacity: 0.8 }}>(V{verNum})</span>
+                                          </strong>
                                           <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>{exp.description}</div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -796,9 +813,15 @@ export default function StudentDashboard() {
                                             className="academic-btn btn-academic-primary pill"
                                             style={{ padding: '6px 14px', fontSize: '12px' }}
                                             disabled={startingExpId === exp.experiment_id}
-                                            onClick={() => handleStartExperiment(exp.experiment_id)}
+                                            onClick={() => {
+                                              if (exp.session_id) {
+                                                navigate(`/experiment/${exp.experiment_id}?sessionId=${exp.session_id}`);
+                                              } else {
+                                                handleStartExperiment(exp.experiment_id);
+                                              }
+                                            }}
                                           >
-                                            {startingExpId === exp.experiment_id ? 'Launching...' : (statusText === 'Completed' ? 'Review' : 'Resume')}
+                                            {startingExpId === exp.experiment_id ? 'Launching...' : (statusText === 'Completed' ? 'Review' : (statusText === 'In Progress' ? 'Resume' : 'Start'))}
                                           </button>
                                         </div>
                                       </div>
@@ -840,14 +863,16 @@ export default function StudentDashboard() {
                   <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 700 }}>Your Worksheet Submissions</h3>
                   {completedExperiments.length > 0 ? (
                     <div className="bento-list-stack">
-                      {completedExperiments.map(item => (
-                        <div key={item.experiment_id} className="bento-list-row">
-                          <div>
-                            <strong>{item.experiment_name}</strong>
-                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              Signoff Date: {new Date(item.session_completed_at).toLocaleDateString()}
+                      {completedExperiments.map(item => {
+                        const verNum = item.session_version_number || item.latest_version_number || 1;
+                        return (
+                          <div key={item.session_id ? `history-${item.session_id}` : `history-exp-${item.experiment_id}-${verNum}`} className="bento-list-row">
+                            <div>
+                              <strong>{item.experiment_name} <span style={{ fontSize: '11px', color: 'var(--accent-green)', opacity: 0.8 }}>(V{verNum})</span></strong>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                Signoff Date: {new Date(item.session_completed_at).toLocaleDateString()}
+                              </div>
                             </div>
-                          </div>
                           <button 
                             className="academic-btn btn-academic-secondary"
                             onClick={() => handleDownloadWorksheet(item)}
@@ -855,7 +880,7 @@ export default function StudentDashboard() {
                             Download Sheet
                           </button>
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>

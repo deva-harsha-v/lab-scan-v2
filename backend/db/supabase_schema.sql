@@ -138,7 +138,7 @@ CREATE TABLE student_sessions (
     session_started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     session_completed_at TIMESTAMP WITH TIME ZONE,
     current_video_progress JSONB,
-    UNIQUE (student_id, experiment_id),
+    UNIQUE (student_id, content_version_id),
     CONSTRAINT fk_student_sessions_student FOREIGN KEY (student_id) REFERENCES users(user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_student_sessions_experiment FOREIGN KEY (experiment_id) REFERENCES experiments(experiment_id) ON DELETE RESTRICT
 );

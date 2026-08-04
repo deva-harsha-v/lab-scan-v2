@@ -69,14 +69,39 @@ router.post('/start', sessionLimiter, authenticateToken, requireRole(['student']
     }
 
     const contentVersionId = versions[0].content_version_id;
+
+    // Check if there is an active (uncompleted) session for this experiment
+    const activeSessions = await db.query(
+      'SELECT * FROM student_sessions WHERE student_id = ? AND experiment_id = ? AND session_completed_at IS NULL',
+      [studentId, experiment_id]
+    );
+    if (activeSessions.length > 0) {
+      return res.status(200).json({
+        message: 'Returning active session.',
+        session: activeSessions[0]
+      });
+    }
+
+    // Check if they already have a session for this specific version
+    const completedSessions = await db.query(
+      'SELECT * FROM student_sessions WHERE student_id = ? AND content_version_id = ?',
+      [studentId, contentVersionId]
+    );
+    if (completedSessions.length > 0) {
+      return res.status(200).json({
+        message: 'Returning completed session for this version.',
+        session: completedSessions[0]
+      });
+    }
+
     const sessionId = crypto.randomUUID();
 
     // 3. Create the session and initialize checklist progress in a transaction
     await executeTransaction(async (conn) => {
       // Atomic double-check inside transaction to avoid race condition double inserts
       const [doubleCheck] = await conn.query(
-        'SELECT session_id FROM student_sessions WHERE student_id = ? AND experiment_id = ?',
-        [studentId, experiment_id]
+        'SELECT session_id FROM student_sessions WHERE student_id = ? AND content_version_id = ?',
+        [studentId, contentVersionId]
       );
       if (doubleCheck && doubleCheck.length > 0) {
         return;
@@ -170,12 +195,28 @@ router.get('/active/:experimentId', authenticateToken, requireRole(['student']),
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   const experimentId = req.params.experimentId;
   const studentId = req.user.user_id;
+  const { sessionId } = req.query;
 
   try {
-    const sessions = await db.query(
-      'SELECT * FROM student_sessions WHERE student_id = ? AND experiment_id = ?',
-      [studentId, experimentId]
-    );
+    let sessions;
+    if (sessionId) {
+      sessions = await db.query(
+        'SELECT * FROM student_sessions WHERE student_id = ? AND session_id = ?',
+        [studentId, sessionId]
+      );
+    } else {
+      sessions = await db.query(
+        'SELECT * FROM student_sessions WHERE student_id = ? AND experiment_id = ? AND session_completed_at IS NULL',
+        [studentId, experimentId]
+      );
+
+      if (sessions.length === 0) {
+        sessions = await db.query(
+          'SELECT * FROM student_sessions WHERE student_id = ? AND experiment_id = ? ORDER BY session_started_at DESC LIMIT 1',
+          [studentId, experimentId]
+        );
+      }
+    }
 
     if (sessions.length === 0) {
       return res.status(404).json({ error: 'No active session found for this experiment.' });
@@ -467,37 +508,91 @@ const getStudentHistory = async (req, res) => {
     const users = await db.query('SELECT branch_id FROM users WHERE user_id = ?', [studentId]);
     const branchId = users.length > 0 ? users[0].branch_id : null;
 
-    let history;
+    let queryStr = `
+      SELECT DISTINCT l.lab_id, l.lab_name, l.location,
+             e.experiment_id, e.experiment_name, e.description,
+             ss.session_id, ss.session_started_at, ss.session_completed_at,
+             ss.learning_stage_completed_at, ss.visual_stage_completed_at, ss.checklist_completed_at,
+             ecv.version_number as session_version_number,
+             (SELECT MAX(version_number) FROM experiment_content_versions WHERE experiment_id = e.experiment_id) as latest_version_number
+      FROM labs l
+    `;
+
+    let params = [studentId];
     if (branchId) {
-      history = await db.query(
-        `SELECT DISTINCT l.lab_id, l.lab_name, l.location,
-                e.experiment_id, e.experiment_name, e.description,
-                ss.session_id, ss.session_started_at, ss.session_completed_at,
-                ss.learning_stage_completed_at, ss.visual_stage_completed_at, ss.checklist_completed_at
-         FROM labs l
-         INNER JOIN lab_branches lb ON l.lab_id = lb.lab_id
-         LEFT JOIN experiments e ON l.lab_id = e.lab_id
-         LEFT JOIN student_sessions ss ON e.experiment_id = ss.experiment_id AND ss.student_id = ?
-         WHERE lb.branch_id = ?
-         ORDER BY l.lab_name ASC, e.experiment_name ASC`,
-        [studentId, branchId]
-      );
+      queryStr += `
+        INNER JOIN lab_branches lb ON l.lab_id = lb.lab_id
+        LEFT JOIN experiments e ON l.lab_id = e.lab_id
+        LEFT JOIN student_sessions ss ON e.experiment_id = ss.experiment_id AND ss.student_id = ?
+        LEFT JOIN experiment_content_versions ecv ON ss.content_version_id = ecv.content_version_id
+        WHERE lb.branch_id = ?
+      `;
+      params.push(branchId);
     } else {
-      // Fallback if student has no branch assigned
-      history = await db.query(
-        `SELECT l.lab_id, l.lab_name, l.location,
-                e.experiment_id, e.experiment_name, e.description,
-                ss.session_id, ss.session_started_at, ss.session_completed_at,
-                ss.learning_stage_completed_at, ss.visual_stage_completed_at, ss.checklist_completed_at
-         FROM labs l
-         LEFT JOIN experiments e ON l.lab_id = e.lab_id
-         LEFT JOIN student_sessions ss ON e.experiment_id = ss.experiment_id AND ss.student_id = ?
-         ORDER BY l.lab_name ASC, e.experiment_name ASC`,
-        [studentId]
-      );
+      queryStr += `
+        LEFT JOIN experiments e ON l.lab_id = e.lab_id
+        LEFT JOIN student_sessions ss ON e.experiment_id = ss.experiment_id AND ss.student_id = ?
+        LEFT JOIN experiment_content_versions ecv ON ss.content_version_id = ecv.content_version_id
+      `;
     }
 
-    res.json(history);
+    queryStr += ` ORDER BY l.lab_name ASC, e.experiment_name ASC`;
+
+    const rawHistory = await db.query(queryStr, params);
+
+    // Group rows by experiment_id to synthesize pending latest versions
+    const synthesizedHistory = [];
+    const experimentsMap = {};
+
+    for (const row of rawHistory) {
+      if (!row.experiment_id) {
+        // Lab without experiments
+        synthesizedHistory.push(row);
+        continue;
+      }
+
+      if (!experimentsMap[row.experiment_id]) {
+        experimentsMap[row.experiment_id] = [];
+      }
+      experimentsMap[row.experiment_id].push(row);
+    }
+
+    for (const expId in experimentsMap) {
+      const rows = experimentsMap[expId];
+      const latestVersionNum = rows[0].latest_version_number || 1;
+      const hasLatestSession = rows.some(r => r.session_id && r.session_version_number === latestVersionNum);
+      const hasActiveSession = rows.some(r => r.session_id && !r.session_completed_at);
+
+      // Add all existing sessions for this experiment to history
+      for (const row of rows) {
+        if (row.session_id) {
+          synthesizedHistory.push(row);
+        }
+      }
+
+      // If they have no active session and no session of the latest version, add a synthesized "Pending" row for the latest version
+      if (!hasActiveSession && !hasLatestSession) {
+        const baseRow = rows[0];
+        synthesizedHistory.push({
+          lab_id: baseRow.lab_id,
+          lab_name: baseRow.lab_name,
+          location: baseRow.location,
+          experiment_id: baseRow.experiment_id,
+          experiment_name: baseRow.experiment_name,
+          description: baseRow.description,
+          session_id: null,
+          session_started_at: null,
+          session_completed_at: null,
+          learning_stage_completed_at: null,
+          visual_stage_completed_at: null,
+          checklist_completed_at: null,
+          session_version_number: null,
+          latest_version_number: latestVersionNum
+        });
+      }
+    }
+
+    res.json(synthesizedHistory);
   } catch (err) {
     console.error('Error fetching student history:', err);
     res.status(500).json({ error: 'Internal server error.' });
