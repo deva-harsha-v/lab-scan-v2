@@ -15,14 +15,23 @@ export function useEnforcedTimer({
   
   const timerRef = useRef(null);
   const lastSyncRef = useRef(initialProgress);
+  const initializedVideoIdRef = useRef(null);
+  const watchedSecondsRef = useRef(watchedSeconds);
 
   useEffect(() => {
-    setWatchedSeconds(initialProgress);
-    setIsCompleted(initialProgress >= minDuration);
-    // Auto-start timer when active video changes if not completed
-    setIsPlaying(initialProgress < minDuration && isTabActive);
-    lastSyncRef.current = initialProgress;
-  }, [videoId]);
+    watchedSecondsRef.current = watchedSeconds;
+  }, [watchedSeconds]);
+
+  useEffect(() => {
+    // Only set/reset if videoId changed, or if it's the first time we get a positive initialProgress for this videoId
+    if (initializedVideoIdRef.current !== videoId || (initialProgress > 0 && watchedSecondsRef.current === 0)) {
+      setWatchedSeconds(initialProgress);
+      setIsCompleted(initialProgress >= minDuration);
+      setIsPlaying(initialProgress < minDuration && isTabActive);
+      lastSyncRef.current = initialProgress;
+      initializedVideoIdRef.current = videoId;
+    }
+  }, [videoId, initialProgress, minDuration, isTabActive]);
 
   // Sync to database if student session is active
   const syncProgress = async (currentProgress) => {
@@ -138,10 +147,6 @@ export function useEnforcedTimer({
   }, [isPlaying, isTabActive, isCompleted, minDuration, sessionId, videoId]);
 
   // Keep ref of latest progress to use inside unmount cleanup without triggering effect re-registration
-  const watchedSecondsRef = useRef(watchedSeconds);
-  useEffect(() => {
-    watchedSecondsRef.current = watchedSeconds;
-  }, [watchedSeconds]);
 
   // Sync final status on unmount ONLY
   useEffect(() => {

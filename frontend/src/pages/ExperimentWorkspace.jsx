@@ -1162,7 +1162,7 @@ export default function ExperimentWorkspace() {
 
       {/* Global Header */}
       <header className="workspace-header">
-        <div className="workspace-header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="workspace-header-left" style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
           <motion.button 
             className="exit-ghost-btn" 
             onClick={() => navigate(isGhostMode ? '/scan-simulator' : '/student/dashboard')}
@@ -1171,10 +1171,10 @@ export default function ExperimentWorkspace() {
           >
             <ArrowLeft size={14} /> Exit
           </motion.button>
-          <div style={{ width: '1px', height: '24px', background: 'var(--border-color)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <LabScanLogo size={24} />
-            <div className="workspace-header-title-container" style={{ textAlign: 'left' }}>
+          <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', flexShrink: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <LabScanLogo size={24} style={{ flexShrink: 0 }} />
+            <div className="workspace-header-title-container" style={{ textAlign: 'left', minWidth: 0 }}>
               <span className="workspace-header-breadcrumb" style={{ fontSize: '10px', fontFamily: font.mono, color: 'var(--neutral-slate)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
                 {experiment?.lab_name} {isGhostMode && '• GHOST ACCESS'}
               </span>
@@ -1576,37 +1576,53 @@ export default function ExperimentWorkspace() {
               >
                 {activeVideo ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
                     {/* Header Details */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
-                      <div style={{ textAlign: 'left' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px', minWidth: 0 }}>
+                      <div style={{ textAlign: 'left', minWidth: 0, width: '100%' }}>
                         <span style={{ fontSize: '10px', color: 'var(--accent-cyan)', fontFamily: font.mono, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>ACTIVE RESOURCE</span>
-                        <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '4px 0 0', color: 'var(--text-primary)' }}>{activeVideo.title}</h3>
+                        <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '4px 0 0', color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal', width: '100%' }}>{activeVideo.title}</h3>
                       </div>
                     </div>
 
                     {/* Video Selector Tabs (Enables easy switching on all screen sizes) */}
                     {videoLinks.length > 1 && (
-                      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)', marginBottom: '4px' }}>
-                        {videoLinks.map((vid, idx) => {
-                          const savedProgress = session?.current_video_progress?.[vid.id] || 0;
-                          const isDone = savedProgress >= vid.min_duration;
-                          const isActive = activeVideo?.id === vid.id;
-                          return (
-                            <button
-                              key={vid.id || idx}
-                              onClick={() => handleSelectVideo(vid)}
-                              className={`academic-btn ${isActive ? 'btn-academic-primary' : 'btn-academic-secondary'} pill`}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
-                            >
-                              <Play size={12} style={{ opacity: isActive ? 1 : 0.7 }} />
-                              {vid.title}
-                              <span style={{ fontSize: '10px', opacity: 0.8, marginLeft: '4px' }}>
-                                ({isDone ? '✓ Met' : `${formatTime(savedProgress)} / ${formatTime(vid.min_duration)}`})
-                              </span>
-                            </button>
-                          );
-                        })}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '4px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+                        <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: font.mono, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Select Visual Resource:</span>
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                          {videoLinks.map((vid, idx) => {
+                            const savedProgress = session?.current_video_progress?.[vid.id] || 0;
+                            const isDone = savedProgress >= vid.min_duration;
+                            const isActive = activeVideo?.id === vid.id;
+                            return (
+                              <button
+                                key={vid.id || idx}
+                                onClick={() => handleSelectVideo(vid)}
+                                className="academic-btn pill"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '12px',
+                                  padding: '8px 16px',
+                                  whiteSpace: 'nowrap',
+                                  border: isActive ? '1px solid var(--accent-blue)' : '1px solid var(--border-color)',
+                                  background: isActive ? 'rgba(59, 130, 246, 0.1)' : 'var(--surface-l1)',
+                                  color: isActive ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                                  fontWeight: isActive ? 700 : 500,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease',
+                                  flexShrink: 0
+                                }}
+                              >
+                                <Play size={12} style={{ color: isActive ? 'var(--accent-blue)' : 'var(--text-muted)' }} />
+                                <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '200px' }}>{vid.title}</span>
+                                <span style={{ fontSize: '10px', color: isDone ? 'var(--success-emerald)' : 'var(--text-muted)', marginLeft: '4px', fontWeight: 600 }}>
+                                  {isDone ? '✓ Met' : `${formatTime(savedProgress)} / ${formatTime(vid.min_duration)}`}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
 
@@ -1615,7 +1631,7 @@ export default function ExperimentWorkspace() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                           <ShieldCheck size={18} style={{ color: 'var(--accent-cyan)' }} />
-                          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', overflowWrap: 'break-word', wordBreak: 'break-word' }}>
+                          <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', wordBreak: 'break-word', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
                             Physical Bench Verification (ArUco Marker #{experiment?.ar_qr_marker_id || '01'})
                           </span>
                         </div>
@@ -1637,18 +1653,43 @@ export default function ExperimentWorkspace() {
                             {formatTime(remainingSeconds)}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '12px', color: isCurrentVideoCompleted ? 'var(--success-emerald)' : 'var(--text-secondary)', fontWeight: 600 }}>
-                            {isCurrentVideoCompleted ? '✓ REQUIRED TIME MET' : `${formatTime(watchedSeconds)} / ${formatTime(activeVideo.min_duration)} watched`}
-                          </div>
-                          <div style={{ marginTop: '4px' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: isPlaying ? 'var(--success-emerald)' : 'var(--text-muted)', fontFamily: font.mono, fontWeight: 700 }}>
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isPlaying ? 'var(--success-emerald)' : 'var(--text-muted)' }} />
-                              {isPlaying ? 'TIMER ACTIVE' : 'TIMER PAUSED'}
-                            </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <button
+                            onClick={() => setManualPlaying(!isPlaying)}
+                            className="academic-btn pill"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '36px',
+                              height: '36px',
+                              padding: 0,
+                              borderRadius: '50%',
+                              background: isPlaying ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                              border: '1px solid ' + (isPlaying ? 'var(--danger-red)' : 'var(--success-emerald)'),
+                              color: isPlaying ? 'var(--danger-red)' : 'var(--success-emerald)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              flexShrink: 0
+                            }}
+                            title={isPlaying ? 'Pause Timer' : 'Start Timer'}
+                          >
+                            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                          </button>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '12px', color: isCurrentVideoCompleted ? 'var(--success-emerald)' : 'var(--text-secondary)', fontWeight: 600 }}>
+                              {isCurrentVideoCompleted ? '✓ REQUIRED TIME MET' : `${formatTime(watchedSeconds)} / ${formatTime(activeVideo.min_duration)} watched`}
+                            </div>
+                            <div style={{ marginTop: '4px' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: isPlaying ? 'var(--success-emerald)' : 'var(--text-muted)', fontFamily: font.mono, fontWeight: 700 }}>
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: isPlaying ? 'var(--success-emerald)' : 'var(--text-muted)' }} />
+                                {isPlaying ? 'TIMER ACTIVE' : 'TIMER PAUSED'}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
+                    )}                    </div>
                     )}
 
                     {/* Video Player */}
