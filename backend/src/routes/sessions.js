@@ -167,6 +167,7 @@ router.post('/verify-aruco', sessionLimiter, authenticateToken, requireRole(['st
 
 // GET /api/sessions/active/:experimentId - Get active session status for a student
 router.get('/active/:experimentId', authenticateToken, requireRole(['student']), async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   const experimentId = req.params.experimentId;
   const studentId = req.user.user_id;
 
