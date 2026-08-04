@@ -225,6 +225,10 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
 
     const session = sessions[0];
 
+    if (session.session_completed_at || session.checklist_completed_at) {
+      return res.status(400).json({ error: 'This experiment session is completed and read-only.' });
+    }
+
     if (video_id && watched_seconds !== undefined) {
       // 1. Fetch content version video links to validate ID and min_duration
       const versions = await db.query(
@@ -353,6 +357,10 @@ router.put('/checklist', sessionLimiter, authenticateToken, requireRole(['studen
     const sessions = await db.query('SELECT * FROM student_sessions WHERE session_id = ? AND student_id = ?', [session_id, studentId]);
     if (sessions.length === 0) {
       return res.status(403).json({ error: 'Unauthorized session access.' });
+    }
+
+    if (sessions[0].session_completed_at || sessions[0].checklist_completed_at) {
+      return res.status(400).json({ error: 'This experiment session is completed and read-only.' });
     }
 
     if (!sessions[0].visual_stage_completed_at) {

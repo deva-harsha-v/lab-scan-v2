@@ -214,9 +214,15 @@ export default function ExperimentWorkspace() {
       return 'about:blank';
     }
 
-    if (vid.type === 'faculty') {
-      if (rawUrl.includes('drive.google.com') && rawUrl.includes('/view')) {
-        return rawUrl.replace('/view', '/preview');
+    // Google Drive URL parsing
+    if (rawUrl.includes('drive.google.com')) {
+      const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileIdMatch && fileIdMatch[1]) {
+        return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+      }
+      const idMatch = rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch && idMatch[1]) {
+        return `https://drive.google.com/file/d/${idMatch[1]}/preview`;
       }
       return rawUrl;
     }
@@ -240,7 +246,7 @@ export default function ExperimentWorkspace() {
   // Handle stage navigation click with ArUco and completion lock checks
   const handleStageClick = (targetStage) => {
     if (session?.session_completed_at || session?.checklist_completed_at) {
-      alert('This experiment session has already been completed and officially stamped. Session records are read-only.');
+      setActiveStage(targetStage);
       return;
     }
     if (targetStage === 'visual' && !isArUcoScanned && !isGhostMode) {
@@ -256,6 +262,10 @@ export default function ExperimentWorkspace() {
 
   // Mark Learning Stage Completed (Student only)
   const completeLearningStage = async (skipArucoCheck = false) => {
+    if (session?.session_completed_at || session?.checklist_completed_at) {
+      alert('This session is completed and read-only.');
+      return;
+    }
     if (!skipArucoCheck && !isArUcoScanned && !isGhostMode) {
       setShowScanGatekeeper(true);
       return;
@@ -304,7 +314,6 @@ export default function ExperimentWorkspace() {
       setTimeout(() => {
         setScanSuccess(false);
         setShowScanGatekeeper(false);
-        completeLearningStage(true);
       }, 1200);
     } else {
       setScanGatekeeperError(`Wrong Marker Scanned! You scanned ArUco Marker #${scannedIdStr}, but your lab bench requires ArUco Marker #${expectedId}.`);
@@ -317,6 +326,10 @@ export default function ExperimentWorkspace() {
 
   // Complete Visual Stage (Checks if all video timers are done)
   const completeVisualStage = async () => {
+    if (session?.session_completed_at || session?.checklist_completed_at) {
+      alert('This session is completed and read-only.');
+      return;
+    }
     if (isGhostMode) {
       alert('Ghost Mode does not enforce checklist. Feel free to explore.');
       return;
@@ -353,7 +366,7 @@ export default function ExperimentWorkspace() {
 
   // Toggle Checklist Checkboxes (Student only)
   const handleChecklistToggle = async (item) => {
-    if (isGhostMode) return;
+    if (isGhostMode || session?.session_completed_at || session?.checklist_completed_at) return;
     const newCompleted = !item.is_completed;
     
     // 1. Update state optimistically for instant UI feedback (reduces INP to near 0ms!)
@@ -386,6 +399,10 @@ export default function ExperimentWorkspace() {
 
   // Complete Checklist Stage & Complete Session
   const completeChecklistStage = async () => {
+    if (session?.session_completed_at || session?.checklist_completed_at) {
+      alert('This session is completed and read-only.');
+      return;
+    }
     const allChecked = checklistItems.every(ci => ci.is_completed);
     if (!allChecked) {
       alert('Please complete all verification checklist items before finishing.');
@@ -1530,12 +1547,18 @@ export default function ExperimentWorkspace() {
 
                 {/* Navigation Action */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-                  <button 
-                    className="academic-btn btn-academic-primary pill"
-                    onClick={completeLearningStage}
-                  >
-                    Confirm Stage Completion & Continue <ChevronRight size={14} />
-                  </button>
+                  {session?.session_completed_at || session?.checklist_completed_at || session?.learning_stage_completed_at ? (
+                    <span className="status-chip pass" style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={16} /> Learning Stage Verified & Completed
+                    </span>
+                  ) : (
+                    <button 
+                      className="academic-btn btn-academic-primary pill"
+                      onClick={completeLearningStage}
+                    >
+                      Confirm Stage Completion & Continue <ChevronRight size={14} />
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -1604,17 +1627,69 @@ export default function ExperimentWorkspace() {
 
                     {/* Video Player */}
                     <div className="video-wrapper-card">
-                      <iframe 
-                        loading="lazy"
-                        src={`${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`}
-                        title={activeVideo.title}
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
-                        style={{ width: '100%', height: '100%' }}
-                      />
+                      {parseEmbedVideoUrl(activeVideo) === 'about:blank' ? (
+                        <div style={{
+                          width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center', background: 'var(--surface-l2)',
+                          border: '1px dashed var(--border-color)', borderRadius: '8px', color: 'var(--text-secondary)',
+                          padding: '24px', textAlign: 'center'
+                        }}>
+                          <AlertTriangle size={40} style={{ color: 'var(--warning-amber)', marginBottom: '12px' }} />
+                          <h4 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 700 }}>Unable to Embed Video</h4>
+                          <p style={{ fontSize: '12px', margin: '6px 0 12px', maxWidth: '320px', lineHeight: 1.4 }}>
+                            This video link cannot be safely embedded. The domain is not allowed, or the URL format is invalid.
+                          </p>
+                          <a 
+                            href={activeVideo.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="academic-btn btn-academic-secondary pill"
+                            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            Open Resource Link <ChevronRight size={12} />
+                          </a>
+                        </div>
+                      ) : (
+                        <iframe 
+                          loading="lazy"
+                          src={parseEmbedVideoUrl(activeVideo).includes('drive.google.com') 
+                            ? parseEmbedVideoUrl(activeVideo) 
+                            : `${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`
+                          }
+                          title={activeVideo.title}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+                          style={{ width: '100%', height: '100%' }}
+                        />
+                      )}
                     </div>
+
+                    {/* Google Drive Specific Guidance & Fallback */}
+                    {activeVideo?.url && activeVideo.url.includes('drive.google.com') && (
+                      <div className="safety-alert-box" style={{ borderLeft: '3px solid var(--accent-blue)', background: 'var(--surface-l1)', borderRadius: '8px', padding: '14px 18px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue)', fontFamily: font.mono, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Google Drive Resource Guide</div>
+                        <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                          If the video displays a connection error or blank screen:
+                          <ul style={{ margin: '6px 0 0 18px', padding: 0, fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <li>Verify that the owner/instructor has set sharing to <strong>"Anyone with the link can view"</strong>.</li>
+                            <li>Ensure you are logged into your institutional Google account in this browser.</li>
+                          </ul>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '6px' }}>
+                          <a 
+                            href={activeVideo.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="academic-btn btn-academic-secondary pill" 
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', padding: '6px 12px', textDecoration: 'none' }}
+                          >
+                            <FileText size={13} /> Open Directly in Google Drive <ChevronRight size={12} />
+                          </a>
+                        </div>
+                      </div>
+                    )}
 
 
 
@@ -1642,13 +1717,19 @@ export default function ExperimentWorkspace() {
                       <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: font.mono }}>
                         {!isGhostMode && `Resource time: ${formatTime(watchedSeconds)} / ${formatTime(activeVideo?.min_duration || 60)}`}
                       </span>
-                      <button 
-                        className="academic-btn btn-academic-primary pill"
-                        onClick={completeVisualStage}
-                        disabled={!isGhostMode && watchedSeconds < (activeVideo?.min_duration || 0) && !isCurrentVideoCompleted}
-                      >
-                        Proceed to Verification <ChevronRight size={14} />
-                      </button>
+                      {session?.session_completed_at || session?.checklist_completed_at || session?.visual_stage_completed_at ? (
+                        <span className="status-chip pass" style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle2 size={16} /> Visual Stage Completed
+                        </span>
+                      ) : (
+                        <button 
+                          className="academic-btn btn-academic-primary pill"
+                          onClick={completeVisualStage}
+                          disabled={!isGhostMode && watchedSeconds < (activeVideo?.min_duration || 0) && !isCurrentVideoCompleted}
+                        >
+                          Proceed to Verification <ChevronRight size={14} />
+                        </button>
+                      )}
                     </div>
 
                   </div>
@@ -1733,13 +1814,19 @@ export default function ExperimentWorkspace() {
 
                 {/* Sign-off Action */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button 
-                    className="academic-btn btn-academic-success pill"
-                    onClick={completeChecklistStage}
-                    disabled={!checklistItems.every(ci => ci.is_completed)}
-                  >
-                    Generate Faculty Verification Record <CheckCircle2 size={14} />
-                  </button>
+                  {session?.session_completed_at || session?.checklist_completed_at ? (
+                    <span className="status-chip pass" style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={16} /> Verification Record Generated & Signed Off
+                    </span>
+                  ) : (
+                    <button 
+                      className="academic-btn btn-academic-success pill"
+                      onClick={completeChecklistStage}
+                      disabled={!checklistItems.every(ci => ci.is_completed)}
+                    >
+                      Generate Faculty Verification Record <CheckCircle2 size={14} />
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )}
