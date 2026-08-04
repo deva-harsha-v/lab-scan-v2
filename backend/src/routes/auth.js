@@ -167,7 +167,8 @@ router.post('/login', tightLimiter, validateBody(loginSchema), async (req, res) 
         username: user.username,
         role: user.role,
         force_password_change: !!user.force_password_change
-      }
+      },
+      accessToken
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -226,7 +227,8 @@ router.post('/refresh', async (req, res) => {
           user_id: user.user_id,
           username: user.username,
           role: user.role
-        }
+        },
+        accessToken
       });
     } catch (dbErr) {
       console.error('Database error during token refresh:', dbErr);

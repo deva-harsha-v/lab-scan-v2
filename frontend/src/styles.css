@@ -1351,6 +1351,10 @@ p {
     display: flex;
   }
   
+  .speed-dial-wrapper {
+    display: none !important;
+  }
+  
   body:has(input:focus, select:focus, textarea:focus) .speed-dial-wrapper,
   body:has(input:focus, select:focus, textarea:focus) .btn-fab-scan {
     opacity: 0 !important;

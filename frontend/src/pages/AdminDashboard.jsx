@@ -705,6 +705,41 @@ export default function AdminDashboard() {
   const totalRegisteredStudents = studentSummary?.totalStudents || 0;
   const activeRate = totalRegisteredStudents > 0 ? ((studentSummary?.activeStudents || 0) / totalRegisteredStudents) * 100 : 0;
 
+  if (error && (error.toLowerCase().includes('token') || error.toLowerCase().includes('unauthorized') || error.toLowerCase().includes('denied') || error.toLowerCase().includes('jwt') || error.toLowerCase().includes('auth'))) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-primary)',
+        color: 'var(--text-primary)',
+        fontFamily: font.sans,
+        padding: '24px',
+        textAlign: 'center'
+      }}>
+        <div className="login-card" style={{ maxWidth: '400px', width: '100%', padding: '40px', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: '24px', boxShadow: 'var(--glass-shadow)', boxSizing: 'border-box' }}>
+          <div style={{ color: 'var(--accent-red)', fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px' }}>Session Expired</h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.6 }}>
+            {error || 'Your administrative session is no longer active. Please log in again to access the console.'}
+          </p>
+          <button
+            onClick={() => {
+              clearSession();
+              navigate('/admin/login');
+            }}
+            className="academic-btn btn-academic-primary pill"
+            style={{ width: '100%', padding: '12px 24px', fontWeight: 700 }}
+          >
+            Log In Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bento-dashboard-wrapper">
       <style>{`

@@ -12,7 +12,7 @@ function getCookie(name) {
 }
 
 export function getAccessToken() {
-  return null;
+  return sessionStorage.getItem('accessToken');
 }
 
 export function getRefreshToken() {
@@ -27,16 +27,22 @@ export function getUser() {
 export function setSession(accessToken, refreshToken, user) {
   // Overload to support setSession(user)
   let userObj = user;
+  let accessTok = accessToken;
   if (!user && accessToken && typeof accessToken === 'object') {
     userObj = accessToken;
+    accessTok = null;
   }
   if (userObj) {
     sessionStorage.setItem('user', JSON.stringify(userObj));
+  }
+  if (accessTok && typeof accessTok === 'string') {
+    sessionStorage.setItem('accessToken', accessTok);
   }
 }
 
 export function clearSession() {
   sessionStorage.removeItem('user');
+  sessionStorage.removeItem('accessToken');
   // Trigger background logout on the server to clear cookies and revoke refresh token
   fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
 }
@@ -49,6 +55,12 @@ export async function apiFetch(endpoint, options = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {})
   };
+
+  // Attach Access Token if it exists
+  const accessToken = getAccessToken();
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
 
   // Attach CSRF token if cookie exists
   const csrfToken = getCookie('csrfToken');
@@ -81,13 +93,19 @@ export async function apiFetch(endpoint, options = {}) {
         if (refreshResponse.ok) {
           const refreshData = await refreshResponse.json();
           if (refreshData.user) {
-            setSession(refreshData.user);
+            setSession(refreshData.accessToken, null, refreshData.user);
           }
           
           // Re-fetch CSRF token in case it was rotated
           const newCsrfToken = getCookie('csrfToken');
           if (newCsrfToken) {
             headers['X-CSRF-Token'] = newCsrfToken;
+          }
+
+          // Update Authorization header with new token
+          if (refreshData.accessToken) {
+            headers['Authorization'] = `Bearer ${refreshData.accessToken}`;
+            fetchOptions.headers = headers;
           }
           
           // Retry original request
