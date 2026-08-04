@@ -281,6 +281,12 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
           return res.status(400).json({ error: 'Cannot complete learning stage without verifying ArUco marker.' });
         }
 
+        await db.query('UPDATE student_sessions SET learning_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
+      } else if (stage === 'visual') {
+        if (!session.learning_stage_completed_at) {
+          return res.status(400).json({ error: 'Cannot complete visual stage before completing learning stage.' });
+        }
+
         // Verify every video meets its required min_duration
         const versions = await db.query(
           'SELECT video_links FROM experiment_content_versions WHERE content_version_id = ?',
@@ -301,16 +307,11 @@ router.put('/progress', sessionLimiter, authenticateToken, requireRole(['student
           const watched = parseFloat(progress[video.id] || '0');
           if (watched < video.min_duration) {
             return res.status(400).json({
-              error: `Cannot complete learning stage. Required video "${video.title}" must be watched for at least ${video.min_duration} seconds.`
+              error: `Cannot complete visual stage. Required video "${video.title}" must be watched for at least ${video.min_duration} seconds.`
             });
           }
         }
 
-        await db.query('UPDATE student_sessions SET learning_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
-      } else if (stage === 'visual') {
-        if (!session.learning_stage_completed_at) {
-          return res.status(400).json({ error: 'Cannot complete visual stage before completing learning stage.' });
-        }
         await db.query('UPDATE student_sessions SET visual_stage_completed_at = ? WHERE session_id = ?', [now, session_id]);
       } else if (stage === 'checklist') {
         if (!session.visual_stage_completed_at) {

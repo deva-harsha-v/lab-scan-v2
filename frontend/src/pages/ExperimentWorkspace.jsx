@@ -40,6 +40,7 @@ export default function ExperimentWorkspace() {
   const [showScanGatekeeper, setShowScanGatekeeper] = useState(false);
   const [scanGatekeeperError, setScanGatekeeperError] = useState('');
   const [scanSuccess, setScanSuccess] = useState(false);
+  const [hasScannerBeenDismissed, setHasScannerBeenDismissed] = useState(false);
 
   // Video Player states
   const [activeVideo, setActiveVideo] = useState(null);
@@ -175,6 +176,13 @@ export default function ExperimentWorkspace() {
 
     initWorkspace();
   }, [experimentId, isGhostMode, navigate]);
+
+  // Auto-launch scanner modal when entering a stage that requires marker verification (Learning Stage, if not scanned yet)
+  useEffect(() => {
+    if (activeStage === 'learning' && !isArUcoScanned && !isGhostMode && !loading && session && !hasScannerBeenDismissed) {
+      setShowScanGatekeeper(true);
+    }
+  }, [activeStage, isArUcoScanned, isGhostMode, loading, session, hasScannerBeenDismissed]);
 
   // Handle video selection change
   const handleSelectVideo = (vid) => {
@@ -1237,7 +1245,10 @@ export default function ExperimentWorkspace() {
               <button 
                 className="academic-btn btn-academic-secondary"
                 style={{ width: '100%', padding: '8px', fontSize: '12px' }}
-                onClick={() => setShowScanGatekeeper(false)}
+                onClick={() => {
+                  setShowScanGatekeeper(false);
+                  setHasScannerBeenDismissed(true);
+                }}
               >
                 Back to Theory & Objectives
               </button>
