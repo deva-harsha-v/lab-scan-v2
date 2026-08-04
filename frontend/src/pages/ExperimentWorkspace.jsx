@@ -123,10 +123,26 @@ export default function ExperimentWorkspace() {
           }
 
           setSession(activeSession);
-
-          // Fetch the exact version snapshotted in session
           const detail = await apiFetch(`/experiments/${experimentId}?versionId=${activeSession.content_version_id}`);
           setExperiment(detail.experiment);
+
+          // Sync ArUco verification from URL parameter with backend if not already saved in session
+          if (searchParams.get('scanned') === 'true' && !activeSession.aruco_verified_at && detail.experiment) {
+            try {
+              await apiFetch('/sessions/verify-aruco', {
+                method: 'POST',
+                body: JSON.stringify({
+                  experiment_id: experimentId,
+                  scanned_marker_id: detail.experiment.ar_qr_marker_id
+                })
+              });
+              activeSession.aruco_verified_at = new Date().toISOString();
+              setSession({ ...activeSession });
+            } catch (err) {
+              console.warn('Failed to auto-verify scanned marker with backend:', err);
+            }
+          }
+
           setTheoryBlocks(detail.content.theory_procedure_json || []);
           setVideoLinks(detail.content.video_links || []);
 
