@@ -111,17 +111,19 @@ export async function apiFetch(endpoint, options = {}) {
           // Retry original request
           response = await fetch(url, fetchOptions);
         } else {
-          // Refresh token expired or invalid, log out
-          await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-          clearSession();
-          const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
-          window.location.href = redirectPath;
+          // Only clear session and redirect if the refresh token is explicitly expired/unauthorized
+          if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+            await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+            clearSession();
+            const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
+            window.location.href = redirectPath;
+          } else {
+            throw new Error(`Session refresh failed with status ${refreshResponse.status}`);
+          }
         }
       } catch (err) {
-        console.error('Session refresh failed:', err);
-        clearSession();
-        const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
-        window.location.href = redirectPath;
+        console.error('Session refresh failed due to network or server error:', err);
+        throw err; // Propagate connection/network/server errors, do NOT log out the user
       }
     }
   }
