@@ -119,6 +119,16 @@ app.get('/health/live', (req, res) => {
   res.json({ status: 'live', timestamp: new Date() });
 });
 
+app.get('/api/debug-commit', (req, res) => {
+  res.json({
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || 'not-set',
+    railwayServiceId: process.env.RAILWAY_SERVICE_ID || 'not-set',
+    railwayServiceBranch: process.env.RAILWAY_GIT_BRANCH || 'not-set',
+    nodeEnv: process.env.NODE_ENV || 'not-set',
+    customAppId: 'labscan-v2-debug-active'
+  });
+});
+
 // Readiness check: verifies DB pool connection
 app.get('/health/ready', async (req, res) => {
   try {
