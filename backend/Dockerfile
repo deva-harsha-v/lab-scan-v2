@@ -11,12 +11,6 @@ RUN npm ci --only=production
 # Copy remaining source code
 COPY . .
 
-# Change ownership of the app directory to non-root node user
-RUN chown -R node:node /usr/src/app
-
-# Set non-root user
-USER node
-
 EXPOSE 5000
 
 ENV NODE_ENV=production
