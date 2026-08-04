@@ -87,6 +87,12 @@ app.use((req, res, next) => {
     return next();
   }
 
+  // If request contains Authorization header, it is immune to CSRF since CORS prevents cross-site header injection
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
   const csrfCookie = req.cookies?.csrfToken;
   const csrfHeader = req.headers['x-csrf-token'];
 
