@@ -50,9 +50,7 @@ export default function AdminEditor() {
   };
 
   const updateTheoryBlockText = (index, text) => {
-    const updated = [...theoryBlocks];
-    updated[index].text = text;
-    setTheoryBlocks(updated);
+    setTheoryBlocks(prev => prev.map((b, i) => i === index ? { ...b, text } : b));
   };
 
   const removeTheoryBlock = (index) => {
@@ -80,14 +78,16 @@ export default function AdminEditor() {
   };
 
   const updateVideoLinkField = (index, field, value) => {
-    const updated = [...videoLinks];
-    updated[index][field] = value;
-    
-    // Auto-fill default duration depending on type
-    if (field === 'type') {
-      updated[index].min_duration = value === 'faculty' ? 300 : 60;
-    }
-    setVideoLinks(updated);
+    setVideoLinks(prev => prev.map((vid, i) => {
+      if (i === index) {
+        const newVid = { ...vid, [field]: value };
+        if (field === 'type') {
+          newVid.min_duration = value === 'faculty' ? 300 : 60;
+        }
+        return newVid;
+      }
+      return vid;
+    }));
   };
 
   const removeVideoLink = (index) => {

@@ -186,7 +186,8 @@ function validateVideoLinks(videoLinks) {
         host === 'youtube.com' || 
         host === 'www.youtube.com' || 
         host === 'youtu.be' || 
-        host === 'drive.google.com';
+        host === 'drive.google.com' ||
+        host === 'docs.google.com';
       if (!isAllowed) {
         return false;
       }

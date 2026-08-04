@@ -203,7 +203,8 @@ export default function ExperimentWorkspace() {
         host === 'youtube.com' || 
         host === 'www.youtube.com' || 
         host === 'youtu.be' || 
-        host === 'drive.google.com';
+        host === 'drive.google.com' ||
+        host === 'docs.google.com';
 
       if (!isAllowed) {
         console.warn('Blocked iframe load to non-allowed domain:', host);
@@ -215,7 +216,7 @@ export default function ExperimentWorkspace() {
     }
 
     // Google Drive URL parsing
-    if (rawUrl.includes('drive.google.com')) {
+    if (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com')) {
       const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (fileIdMatch && fileIdMatch[1]) {
         return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
@@ -1583,6 +1584,31 @@ export default function ExperimentWorkspace() {
                         <h3 style={{ fontSize: '20px', fontWeight: 700, margin: '4px 0 0', color: 'var(--text-primary)' }}>{activeVideo.title}</h3>
                       </div>
                     </div>
+
+                    {/* Video Selector Tabs (Enables easy switching on all screen sizes) */}
+                    {videoLinks.length > 1 && (
+                      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)', marginBottom: '4px' }}>
+                        {videoLinks.map((vid, idx) => {
+                          const savedProgress = session?.current_video_progress?.[vid.id] || 0;
+                          const isDone = savedProgress >= vid.min_duration;
+                          const isActive = activeVideo?.id === vid.id;
+                          return (
+                            <button
+                              key={vid.id || idx}
+                              onClick={() => handleSelectVideo(vid)}
+                              className={`academic-btn ${isActive ? 'btn-academic-primary' : 'btn-academic-secondary'} pill`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 14px', whiteSpace: 'nowrap' }}
+                            >
+                              <Play size={12} style={{ opacity: isActive ? 1 : 0.7 }} />
+                              {vid.title}
+                              <span style={{ fontSize: '10px', opacity: 0.8, marginLeft: '4px' }}>
+                                ({isDone ? '✓ Met' : `${formatTime(savedProgress)} / ${formatTime(vid.min_duration)}`})
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
 
                     {/* Physical Bench Verification & Proof-of-Presence Enforced */}
                     <div style={{ background: 'var(--surface-l1)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '14px 18px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
