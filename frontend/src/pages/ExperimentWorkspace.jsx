@@ -1689,7 +1689,6 @@ export default function ExperimentWorkspace() {
                           </div>
                         </div>
                       </div>
-                    )}                    </div>
                     )}
 
                     {/* Video Player */}
