@@ -4,6 +4,10 @@ if (!import.meta.env.VITE_API_BASE) {
 
 const API_BASE = import.meta.env.VITE_API_BASE + '/api';
 
+// Module-scoped state for synchronizing token refresh and preventing duplicate logouts
+let isLoggingOut = false;
+let refreshPromise = null;
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
@@ -40,11 +44,13 @@ export function setSession(accessToken, refreshToken, user) {
   }
 }
 
-export function clearSession() {
+export function clearSession(skipServerLogout = false) {
   sessionStorage.removeItem('user');
   sessionStorage.removeItem('accessToken');
-  // Trigger background logout on the server to clear cookies and revoke refresh token
-  fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+  if (!skipServerLogout) {
+    // Trigger background logout on the server to clear cookies and revoke refresh token
+    fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+  }
 }
 
 export async function apiFetch(endpoint, options = {}) {
@@ -81,47 +87,60 @@ export async function apiFetch(endpoint, options = {}) {
     // Avoid infinite loop if auth endpoints fail
     if (endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
       try {
-        const refreshResponse = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken || ''
-          },
-          credentials: 'include'
-        });
+        // Synchronize parallel refresh requests to hit the endpoint only once
+        if (!refreshPromise) {
+          refreshPromise = (async () => {
+            const refreshResponse = await fetch(`${API_BASE}/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken || ''
+              },
+              credentials: 'include'
+            });
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          if (refreshData.user) {
-            setSession(refreshData.accessToken, null, refreshData.user);
-          }
-          
-          // Re-fetch CSRF token in case it was rotated
-          const newCsrfToken = getCookie('csrfToken');
-          if (newCsrfToken) {
-            headers['X-CSRF-Token'] = newCsrfToken;
-          }
-
-          // Update Authorization header with new token
-          if (refreshData.accessToken) {
-            headers['Authorization'] = `Bearer ${refreshData.accessToken}`;
-            fetchOptions.headers = headers;
-          }
-          
-          // Retry original request
-          response = await fetch(url, fetchOptions);
-        } else {
-          // Only clear session and redirect if the refresh token is explicitly expired/unauthorized
-          if (refreshResponse.status === 401 || refreshResponse.status === 403) {
-            await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
-            clearSession();
-            const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
-            window.location.href = redirectPath;
-          } else {
-            throw new Error(`Session refresh failed with status ${refreshResponse.status}`);
-          }
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              if (refreshData.user) {
+                setSession(refreshData.accessToken, null, refreshData.user);
+              }
+              return refreshData.accessToken || null;
+            } else {
+              // Only clear session and redirect if the refresh token is explicitly expired/unauthorized
+              if (refreshResponse.status === 401 || refreshResponse.status === 403) {
+                if (!isLoggingOut) {
+                  isLoggingOut = true;
+                  await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
+                  clearSession(true); // Skip server logout since we just called it above
+                  const redirectPath = window.location.pathname.startsWith('/admin') ? '/admin/login' : '/login';
+                  window.location.href = redirectPath;
+                }
+              }
+              throw new Error(`Session refresh failed with status ${refreshResponse.status}`);
+            }
+          })();
         }
+
+        const newAccessToken = await refreshPromise;
+        // Reset promise so subsequent expirations can trigger a new refresh flow
+        refreshPromise = null;
+
+        // Re-fetch CSRF token in case it was rotated
+        const newCsrfToken = getCookie('csrfToken');
+        if (newCsrfToken) {
+          headers['X-CSRF-Token'] = newCsrfToken;
+        }
+
+        // Update Authorization header with new token
+        if (newAccessToken) {
+          headers['Authorization'] = `Bearer ${newAccessToken}`;
+          fetchOptions.headers = headers;
+        }
+        
+        // Retry original request
+        response = await fetch(url, fetchOptions);
       } catch (err) {
+        refreshPromise = null;
         console.error('Session refresh failed due to network or server error:', err);
         throw err; // Propagate connection/network/server errors, do NOT log out the user
       }
