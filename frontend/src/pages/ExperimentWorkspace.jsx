@@ -207,6 +207,25 @@ export default function ExperimentWorkspace() {
     return null;
   };
 
+  const isDirectVideoUrl = (url) => {
+    if (!url) return false;
+    const rawUrl = url.trim().toLowerCase();
+    try {
+      const parsedUrl = new URL(rawUrl);
+      const host = parsedUrl.hostname;
+      const path = parsedUrl.pathname;
+      return (
+        host.endsWith('.supabase.co') ||
+        path.endsWith('.mp4') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.ogg') ||
+        path.endsWith('.mov')
+      );
+    } catch (e) {
+      return false;
+    }
+  };
+
   // Safe Video Embed Parser (Prevents YouTube 'Video Unavailable' error)
   const parseEmbedVideoUrl = (vid) => {
     if (!vid || !vid.url) return 'https://www.youtube.com/embed/48S8N0fsm8w';
@@ -215,12 +234,18 @@ export default function ExperimentWorkspace() {
     try {
       const parsedUrl = new URL(rawUrl);
       const host = parsedUrl.hostname.toLowerCase();
+      const path = parsedUrl.pathname.toLowerCase();
       const isAllowed = 
         host === 'youtube.com' || 
         host === 'www.youtube.com' || 
         host === 'youtu.be' || 
         host === 'drive.google.com' ||
-        host === 'docs.google.com';
+        host === 'docs.google.com' ||
+        host.endsWith('.supabase.co') ||
+        path.endsWith('.mp4') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.ogg') ||
+        path.endsWith('.mov');
 
       if (!isAllowed) {
         console.warn('Blocked iframe load to non-allowed domain:', host);
@@ -229,6 +254,10 @@ export default function ExperimentWorkspace() {
     } catch (e) {
       console.error('Invalid URL passed to iframe:', rawUrl);
       return 'about:blank';
+    }
+
+    if (isDirectVideoUrl(rawUrl)) {
+      return rawUrl;
     }
 
     // Google Drive URL parsing
@@ -861,6 +890,13 @@ export default function ExperimentWorkspace() {
           overflow: hidden;
           aspect-ratio: 16/9;
           border: 1px solid var(--border-color);
+        }
+        
+        @media (max-width: 768px) {
+          .video-wrapper-card {
+            aspect-ratio: auto;
+            height: 300px;
+          }
         }
 
         .media-controls-row {
@@ -1740,6 +1776,14 @@ export default function ExperimentWorkspace() {
                             Open Resource Link <ChevronRight size={12} />
                           </a>
                         </div>
+                      ) : isDirectVideoUrl(activeVideo.url) ? (
+                        <video 
+                          ref={videoRef}
+                          controls
+                          controlsList="nodownload"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000000', outline: 'none', display: 'block' }}
+                          src={parseEmbedVideoUrl(activeVideo)}
+                        />
                       ) : (activeVideo.url.includes('drive.google.com') || activeVideo.url.includes('docs.google.com')) ? (
                         <iframe 
                           loading="lazy"

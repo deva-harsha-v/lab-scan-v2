@@ -182,12 +182,18 @@ function validateVideoLinks(videoLinks) {
     try {
       const parsedUrl = new URL(vid.url.trim());
       const host = parsedUrl.hostname.toLowerCase();
+      const path = parsedUrl.pathname.toLowerCase();
       const isAllowed = 
         host === 'youtube.com' || 
         host === 'www.youtube.com' || 
         host === 'youtu.be' || 
         host === 'drive.google.com' ||
-        host === 'docs.google.com';
+        host === 'docs.google.com' ||
+        host.endsWith('.supabase.co') ||
+        path.endsWith('.mp4') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.ogg') ||
+        path.endsWith('.mov');
       if (!isAllowed) {
         return false;
       }
