@@ -1741,19 +1741,15 @@ export default function ExperimentWorkspace() {
                           </a>
                         </div>
                       ) : (activeVideo.url.includes('drive.google.com') || activeVideo.url.includes('docs.google.com')) ? (
-                        <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000000' }}>
-                          <iframe 
-                            loading="lazy"
-                            src={parseEmbedVideoUrl(activeVideo)}
-                            title={activeVideo.title}
-                            frameBorder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            style={{ width: '100%', height: '100%', border: '0', display: 'block' }}
-                          />
-                          {/* Invisible overlay blocking the top-right Google Drive pop-out click */}
-                          <div style={{ position: 'absolute', top: 0, right: 0, width: '100px', height: '60px', background: 'transparent' }} />
-                        </div>
+                        <iframe 
+                          loading="lazy"
+                          src={parseEmbedVideoUrl(activeVideo)}
+                          title={activeVideo.title}
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ width: '100%', height: '100%', border: '0', display: 'block' }}
+                        />
                       ) : (
                         <iframe 
                           loading="lazy"
