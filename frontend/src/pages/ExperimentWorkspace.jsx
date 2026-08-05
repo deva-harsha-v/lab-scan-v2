@@ -57,6 +57,94 @@ export default function ExperimentWorkspace() {
   });
 
   const videoRef = React.useRef(null);
+  const playerRef = React.useRef(null);
+
+  // Parse YouTube video ID from URL
+  const getYouTubeVideoId = (url) => {
+    if (!url) return null;
+    const rawUrl = url.trim();
+    const match = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return (match && match[1]) ? match[1] : null;
+  };
+
+  // Manage YouTube IFrame API initialization and playback sync
+  React.useEffect(() => {
+    if (activeStage !== 'visual' || !activeVideo) return;
+
+    const videoId = getYouTubeVideoId(activeVideo.url);
+    if (!videoId) return;
+
+    const initPlayer = () => {
+      if (!window.YT || !window.YT.Player) {
+        setTimeout(initPlayer, 100);
+        return;
+      }
+
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.warn('Error destroying old YT player:', e);
+        }
+        playerRef.current = null;
+      }
+
+      const placeholder = document.getElementById('youtube-player-container');
+      if (!placeholder) {
+        setTimeout(initPlayer, 100);
+        return;
+      }
+
+      placeholder.innerHTML = '<div id="youtube-player-iframe" style="width: 100%; height: 100%; border: 0; display: block;"></div>';
+
+      playerRef.current = new window.YT.Player('youtube-player-iframe', {
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          playsinline: 1,
+          enablejsapi: 1,
+          rel: 0,
+          modestbranding: 1,
+          start: videoTimeOffset || 0
+        },
+        events: {
+          onStateChange: (event) => {
+            // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
+            if (event.data === 1) {
+              setManualPlaying(true);
+            } else if (event.data === 2 || event.data === 0) {
+              setManualPlaying(false);
+            }
+          }
+        }
+      });
+    };
+
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      if (firstScriptTag) {
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+      } else {
+        document.head.appendChild(tag);
+      }
+    }
+
+    initPlayer();
+
+    return () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch (e) {
+          console.warn('Cleanup error destroying YT player:', e);
+        }
+        playerRef.current = null;
+      }
+    };
+  }, [activeVideo, activeStage, videoTimeOffset]);
 
   // Initialize Enforced Timer Hook
   const {
@@ -197,97 +285,7 @@ export default function ExperimentWorkspace() {
     setActiveVideo(vid);
   };
 
-  const getGoogleDriveFileId = (url) => {
-    if (!url) return null;
-    const rawUrl = url.trim();
-    const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-    if (fileIdMatch && fileIdMatch[1]) return fileIdMatch[1];
-    const idMatch = rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-    if (idMatch && idMatch[1]) return idMatch[1];
-    return null;
-  };
 
-  const isDirectVideoUrl = (url) => {
-    if (!url) return false;
-    const rawUrl = url.trim().toLowerCase();
-    try {
-      const parsedUrl = new URL(rawUrl);
-      const host = parsedUrl.hostname;
-      const path = parsedUrl.pathname;
-      return (
-        host.endsWith('.supabase.co') ||
-        path.endsWith('.mp4') ||
-        path.endsWith('.webm') ||
-        path.endsWith('.ogg') ||
-        path.endsWith('.mov')
-      );
-    } catch (e) {
-      return false;
-    }
-  };
-
-  // Safe Video Embed Parser (Prevents YouTube 'Video Unavailable' error)
-  const parseEmbedVideoUrl = (vid) => {
-    if (!vid || !vid.url) return 'https://www.youtube.com/embed/48S8N0fsm8w';
-    const rawUrl = vid.url.trim();
-
-    try {
-      const parsedUrl = new URL(rawUrl);
-      const host = parsedUrl.hostname.toLowerCase();
-      const path = parsedUrl.pathname.toLowerCase();
-      const isAllowed = 
-        host === 'youtube.com' || 
-        host === 'www.youtube.com' || 
-        host === 'youtu.be' || 
-        host === 'drive.google.com' ||
-        host === 'docs.google.com' ||
-        host.endsWith('.supabase.co') ||
-        path.endsWith('.mp4') ||
-        path.endsWith('.webm') ||
-        path.endsWith('.ogg') ||
-        path.endsWith('.mov');
-
-      if (!isAllowed) {
-        console.warn('Blocked iframe load to non-allowed domain:', host);
-        return 'about:blank';
-      }
-    } catch (e) {
-      console.error('Invalid URL passed to iframe:', rawUrl);
-      return 'about:blank';
-    }
-
-    if (isDirectVideoUrl(rawUrl)) {
-      return rawUrl;
-    }
-
-    // Google Drive URL parsing
-    if (rawUrl.includes('drive.google.com') || rawUrl.includes('docs.google.com')) {
-      const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-      if (fileIdMatch && fileIdMatch[1]) {
-        return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
-      }
-      const idMatch = rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-      if (idMatch && idMatch[1]) {
-        return `https://drive.google.com/file/d/${idMatch[1]}/preview`;
-      }
-      return rawUrl;
-    }
-
-    if (rawUrl.includes('embed/')) {
-      const parts = rawUrl.split('embed/')[1]?.split('?');
-      if (parts && parts[0] && parts[0].length >= 8) {
-        return `https://www.youtube.com/embed/${parts[0]}`;
-      }
-    }
-
-    const match = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    if (match && match[1]) {
-      return `https://www.youtube.com/embed/${match[1]}`;
-    }
-
-    // High quality educational physics/chemistry lab demonstration fallback
-    return 'https://www.youtube.com/embed/48S8N0fsm8w';
-  };
 
   // Handle stage navigation click with ArUco and completion lock checks
   const handleStageClick = (targetStage) => {
@@ -1753,8 +1751,8 @@ export default function ExperimentWorkspace() {
                     )}
 
                     {/* Video Player */}
-                    <div className="video-wrapper-card">
-                      {parseEmbedVideoUrl(activeVideo) === 'about:blank' ? (
+                    <div className="video-wrapper-card" style={{ background: '#000000', overflow: 'hidden' }}>
+                      {!getYouTubeVideoId(activeVideo?.url) ? (
                         <div style={{
                           width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
                           alignItems: 'center', justifyContent: 'center', background: 'var(--surface-l2)',
@@ -1762,77 +1760,15 @@ export default function ExperimentWorkspace() {
                           padding: '24px', textAlign: 'center'
                         }}>
                           <AlertTriangle size={40} style={{ color: 'var(--warning-amber)', marginBottom: '12px' }} />
-                          <h4 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 700 }}>Unable to Embed Video</h4>
+                          <h4 style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 700 }}>Invalid Video Resource</h4>
                           <p style={{ fontSize: '12px', margin: '6px 0 12px', maxWidth: '320px', lineHeight: 1.4 }}>
-                            This video link cannot be safely embedded. The domain is not allowed, or the URL format is invalid.
+                            No YouTube video is linked to this resource, or the URL format is invalid.
                           </p>
-                          <a 
-                            href={activeVideo.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="academic-btn btn-academic-secondary pill"
-                            style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
-                          >
-                            Open Resource Link <ChevronRight size={12} />
-                          </a>
                         </div>
-                      ) : isDirectVideoUrl(activeVideo.url) ? (
-                        <video 
-                          ref={videoRef}
-                          controls
-                          playsInline
-                          webkit-playsinline="true"
-                          controlsList="nodownload"
-                          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000000', outline: 'none', display: 'block' }}
-                          src={parseEmbedVideoUrl(activeVideo)}
-                        />
-                      ) : (activeVideo.url.includes('drive.google.com') || activeVideo.url.includes('docs.google.com')) ? (
-                        <iframe 
-                          loading="lazy"
-                          src={parseEmbedVideoUrl(activeVideo)}
-                          title={activeVideo.title}
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          style={{ width: '100%', height: '100%', border: '0', display: 'block' }}
-                        />
                       ) : (
-                        <iframe 
-                          loading="lazy"
-                          src={`${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`}
-                          title={activeVideo.title}
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                          style={{ width: '100%', height: '100%', border: '0', display: 'block' }}
-                        />
+                        <div id="youtube-player-container" style={{ width: '100%', height: '100%', display: 'block' }}></div>
                       )}
                     </div>
-
-                    {/* Google Drive Specific Guidance & Fallback */}
-                    {activeVideo?.url && activeVideo.url.includes('drive.google.com') && (
-                      <div className="safety-alert-box" style={{ borderLeft: '3px solid var(--accent-blue)', background: 'var(--surface-l1)', borderRadius: '8px', padding: '14px 18px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-blue)', fontFamily: font.mono, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Google Drive Resource Guide</div>
-                        <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                          If the video displays a connection error or blank screen:
-                          <ul style={{ margin: '6px 0 0 18px', padding: 0, fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                            <li>Verify that the owner/instructor has set sharing to <strong>"Anyone with the link can view"</strong>.</li>
-                            <li>Ensure you are logged into your institutional Google account in this browser.</li>
-                          </ul>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '6px' }}>
-                          <a 
-                            href={activeVideo.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="academic-btn btn-academic-secondary pill" 
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', padding: '6px 12px', textDecoration: 'none' }}
-                          >
-                            <FileText size={13} /> Open Directly in Google Drive <ChevronRight size={12} />
-                          </a>
-                        </div>
-                      </div>
-                    )}
 
 
 

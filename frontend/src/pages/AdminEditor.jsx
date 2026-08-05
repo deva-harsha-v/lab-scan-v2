@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch, getUser } from '../utils/api';
 import { 
   ArrowLeft, Heading, AlignLeft, AlertTriangle, HelpCircle, 
-  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles 
+  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles, Upload 
 } from 'lucide-react';
 import LabScanLogo from '../components/LabScanLogo';
 import Skeleton from '../components/Skeleton';
@@ -382,16 +382,16 @@ export default function AdminEditor() {
                     </div>
 
                     <div className="form-group" style={{ marginTop: '16px' }}>
-                      <label className="form-label">Video URL (Google Drive share link or YouTube link)</label>
+                      <label className="form-label">YouTube Video URL</label>
                       <input 
                         type="text" 
                         className="form-input"
                         value={vid.url || ''}
                         onChange={(e) => updateVideoLinkField(index, 'url', e.target.value)}
-                        placeholder="e.g. https://drive.google.com/file/d/... or https://www.youtube.com/watch?v=..."
+                        placeholder="e.g. https://www.youtube.com/watch?v=... or https://youtu.be/..."
                       />
                       <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                        <strong>Compression Notice:</strong> For best results, compress your video using HandBrake (or similar encoder) before uploading to Google Drive. Keep the file size under ~150MB for a 10–15 minute video to ensure fast streaming and zero buffering for mobile users in the lab.
+                        <strong>Compression Notice:</strong> For best results, compress your video using HandBrake (or similar encoder) before uploading to YouTube (Unlisted). Keep the file size under ~150MB for a 10–15 minute video to ensure fast streaming and zero buffering for mobile users in the lab.
                       </p>
                     </div>
 
