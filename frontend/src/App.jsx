@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { getUser } from './utils/api';
 
 const Landing = lazy(() => import('./pages/Landing'));
@@ -39,7 +39,7 @@ const LoadingFallback = () => (
 
 export default function App() {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
           {/* Unauthenticated Entrance Routes */}
@@ -85,6 +85,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
-    </HashRouter>
+    </BrowserRouter>
   );
 }

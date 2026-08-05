@@ -2564,7 +2564,7 @@ export default function AdminDashboard() {
               <button 
                 className="speed-dial-item"
                 onClick={() => {
-                  setActiveTab('students');
+                  setActiveTab('settings');
                   setTimeout(() => scrollToSection('add-branch-section'), 100);
                 }}
               >

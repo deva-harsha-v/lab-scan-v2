@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { setSession } from '../utils/api';
 import { ShieldAlert, ArrowLeft, Loader2, Lock, User, Eye, EyeOff } from 'lucide-react';
 import ThemeToggle from '../components/ThemeToggle';
@@ -14,8 +14,13 @@ const font = { mono: "'Space Mono', monospace", sans: "'Outfit', sans-serif" };
 export default function AdminLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(
+    searchParams.get('reason') === 'device'
+      ? "You've been logged out because your account was accessed on another device."
+      : ''
+  );
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 

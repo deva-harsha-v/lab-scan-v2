@@ -14,10 +14,14 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const [error, setError] = useState(
+    searchParams.get('reason') === 'device'
+      ? "You've been logged out because your account was accessed on another device."
+      : ''
+  );
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const expId = searchParams.get('expId');

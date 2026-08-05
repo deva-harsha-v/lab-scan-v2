@@ -75,9 +75,9 @@ function setAuthCookies(res, user, accessToken, refreshToken) {
 }
 
 // Helpers to generate tokens
-function generateAccessToken(user) {
+function generateAccessToken(user, sessionId) {
   return jwt.sign(
-    { user_id: user.user_id, username: user.username, role: user.role },
+    { user_id: user.user_id, username: user.username, role: user.role, session_id: sessionId },
     process.env.JWT_ACCESS_SECRET,
     { expiresIn: process.env.JWT_ACCESS_EXPIRY || '15m' }
   );
@@ -135,14 +135,23 @@ router.post('/login', tightLimiter, validateBody(loginSchema), async (req, res) 
     }
 
     // Successful Login
-    // Reset failed attempts & lockout
-    await db.query('UPDATE users SET failed_attempts = 0, lockout_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', [user.user_id]);
+    // Generate a unique session ID for single active session enforcement
+    const currentSessionId = crypto.randomUUID();
 
-    const accessToken = generateAccessToken(user);
+    // Reset failed attempts & lockout, and record active session ID
+    await db.query(
+      'UPDATE users SET failed_attempts = 0, lockout_until = NULL, current_session_id = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', 
+      [currentSessionId, user.user_id]
+    );
+
+    const accessToken = generateAccessToken(user, currentSessionId);
     const tokenId = crypto.randomUUID();
     const refreshToken = generateRefreshToken(user, tokenId);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    // Invalidate/delete any previous active sessions for this user (enforces single active device)
+    await db.query('DELETE FROM refresh_tokens WHERE user_id = ?', [user.user_id]);
 
     // Store refresh token in database
     await db.query(
@@ -202,12 +211,16 @@ router.post('/refresh', async (req, res) => {
         return res.status(403).json({ error: 'Revoked or expired refresh token.' });
       }
 
+      // Look up current_session_id from DB
+      const users = await db.query('SELECT current_session_id FROM users WHERE user_id = ?', [decoded.user_id]);
+      const activeSessionId = users.length > 0 ? users[0].current_session_id : null;
+
       // Revoke old token
       await db.query('DELETE FROM refresh_tokens WHERE token_id = ?', [decoded.jti]);
 
       // Issue new tokens
       const user = { user_id: decoded.user_id, username: decoded.username, role: decoded.role };
-      const accessToken = generateAccessToken(user);
+      const accessToken = generateAccessToken(user, activeSessionId);
       const newTokenId = crypto.randomUUID();
       const newRefreshToken = generateRefreshToken(user, newTokenId);
       const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -381,9 +394,9 @@ router.put('/admin-profile', authenticateToken, requireRole(['admin']), validate
     await logAction(req.user.user_id, 'UPDATE_ADMIN_PROFILE', 'USER', req.user.user_id, { full_name, username });
 
     // Fetch updated user to issue fresh tokens
-    const updatedUsers = await db.query('SELECT user_id, username, role, full_name FROM users WHERE user_id = ?', [req.user.user_id]);
+    const updatedUsers = await db.query('SELECT user_id, username, role, full_name, current_session_id FROM users WHERE user_id = ?', [req.user.user_id]);
     const updatedUser = updatedUsers[0];
-    const accessToken = generateAccessToken(updatedUser);
+    const accessToken = generateAccessToken(updatedUser, updatedUser.current_session_id);
     const tokenId = crypto.randomUUID();
     const refreshToken = generateRefreshToken(updatedUser, tokenId);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
