@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch, getUser } from '../utils/api';
 import { 
   ArrowLeft, Heading, AlignLeft, AlertTriangle, HelpCircle, 
-  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles 
+  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles, Upload 
 } from 'lucide-react';
 import LabScanLogo from '../components/LabScanLogo';
 import Skeleton from '../components/Skeleton';
@@ -18,6 +18,7 @@ export default function AdminEditor() {
   const [videoLinks, setVideoLinks] = useState([]);
   const [checklistItems, setChecklistItems] = useState([]);
   const [versionNumber, setVersionNumber] = useState(1);
+  const [uploadingState, setUploadingState] = useState({});
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,6 +93,96 @@ export default function AdminEditor() {
 
   const removeVideoLink = (index) => {
     setVideoLinks(videoLinks.filter((_, i) => i !== index));
+  };
+
+  const handleUploadVideo = (index, file, vidId) => {
+    if (!file) return;
+
+    // Validate MP4
+    if (!file.name.toLowerCase().endsWith('.mp4') && file.type !== 'video/mp4') {
+      setUploadingState(prev => ({
+        ...prev,
+        [vidId]: { loading: false, progress: 0, error: 'Only .mp4 video files are accepted.' }
+      }));
+      return;
+    }
+
+    // Validate size (50MB)
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setUploadingState(prev => ({
+        ...prev,
+        [vidId]: { loading: false, progress: 0, error: 'File size exceeds the 50MB limit.' }
+      }));
+      return;
+    }
+
+    setUploadingState(prev => ({
+      ...prev,
+      [vidId]: { loading: true, progress: 0, error: '' }
+    }));
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    const token = localStorage.getItem('token') || document.cookie.match(/token=([^;]+)/)?.[1];
+    const xhr = new XMLHttpRequest();
+    
+    xhr.open('POST', '/api/experiments/video/upload');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    // Track upload progress
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        setUploadingState(prev => ({
+          ...prev,
+          [vidId]: { ...prev[vidId], progress: percent }
+        }));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          updateVideoLinkField(index, 'url', res.url);
+          setUploadingState(prev => ({
+            ...prev,
+            [vidId]: { loading: false, progress: 100, error: '' }
+          }));
+        } catch (e) {
+          setUploadingState(prev => ({
+            ...prev,
+            [vidId]: { loading: false, progress: 0, error: 'Failed to parse server response.' }
+          }));
+        }
+      } else {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          setUploadingState(prev => ({
+            ...prev,
+            [vidId]: { loading: false, progress: 0, error: res.error || 'Server upload failed.' }
+          }));
+        } catch (e) {
+          setUploadingState(prev => ({
+            ...prev,
+            [vidId]: { loading: false, progress: 0, error: `Upload failed (Status: ${xhr.status})` }
+          }));
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      setUploadingState(prev => ({
+        ...prev,
+        [vidId]: { loading: false, progress: 0, error: 'Network error occurred during upload.' }
+      }));
+    };
+
+    xhr.send(formData);
   };
 
   // --- Checklist Items Handlers ---
@@ -371,30 +462,6 @@ export default function AdminEditor() {
                         />
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Resource Type</label>
-                        <select 
-                          className="form-input"
-                          value={vid.type || 'youtube'}
-                          onChange={(e) => updateVideoLinkField(index, 'type', e.target.value)}
-                        >
-                          <option value="youtube">YouTube Video</option>
-                          <option value="faculty">Faculty Recorded Video</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid-2" style={{ gap: '16px', marginTop: '16px' }}>
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label className="form-label">Video URL (Google Drive, YouTube, direct link)</label>
-                        <input 
-                          type="text" 
-                          className="form-input"
-                          value={vid.url || ''}
-                          onChange={(e) => updateVideoLinkField(index, 'url', e.target.value)}
-                          placeholder="e.g. https://www.youtube.com/watch?v=..."
-                        />
-                      </div>
-                      <div className="form-group" style={{ margin: 0 }}>
                         <label className="form-label">Minimum Viewing Timer (Seconds)</label>
                         <input 
                           type="number" 
@@ -402,6 +469,88 @@ export default function AdminEditor() {
                           value={vid.min_duration || 60}
                           onChange={(e) => updateVideoLinkField(index, 'min_duration', parseInt(e.target.value, 10) || 0)}
                         />
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '20px' }}>
+                      <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>Upload Video Resource (.mp4, max 50MB)</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                          <label 
+                            className="academic-btn btn-academic-secondary pill"
+                            style={{ 
+                              cursor: 'pointer', 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '8px',
+                              margin: 0,
+                              padding: '10px 18px',
+                              borderRadius: '6px',
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              border: '1px solid var(--border-color)',
+                              background: 'transparent',
+                              color: '#d1d5db'
+                            }}
+                          >
+                            <Upload size={16} /> Choose Video File
+                            <input 
+                              type="file" 
+                              accept="video/mp4"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleUploadVideo(index, file, vid.id);
+                              }}
+                              style={{ display: 'none' }}
+                            />
+                          </label>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            {vid.url ? '✓ Video uploaded' : 'No video file chosen'}
+                          </span>
+                        </div>
+
+                        {/* Upload Status & Progress */}
+                        {uploadingState[vid.id] && (
+                          <div style={{ background: 'var(--surface-l2)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-color)', marginTop: '4px' }}>
+                            {uploadingState[vid.id].loading && (
+                              <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px', color: 'var(--text-primary)' }}>
+                                  <span>Uploading video...</span>
+                                  <span>{uploadingState[vid.id].progress}%</span>
+                                </div>
+                                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${uploadingState[vid.id].progress}%`, height: '100%', background: '#2563eb', transition: 'width 0.1s ease' }} />
+                                </div>
+                              </div>
+                            )}
+                            {uploadingState[vid.id].error && (
+                              <div style={{ color: 'var(--danger-red)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <AlertTriangle size={14} /> {uploadingState[vid.id].error}
+                              </div>
+                            )}
+                            {uploadingState[vid.id].progress === 100 && !uploadingState[vid.id].loading && !uploadingState[vid.id].error && (
+                              <div style={{ color: 'var(--success-emerald)', fontSize: '13px', fontWeight: 600 }}>
+                                ✓ Upload Completed successfully!
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Preview Player */}
+                        {vid.url && (
+                          <div style={{ marginTop: '8px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '6px', fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Video Preview:</div>
+                            <video 
+                              src={vid.url} 
+                              controls 
+                              playsInline
+                              style={{ width: '100%', maxHeight: '200px', borderRadius: '6px', background: '#000000', display: 'block', border: '1px solid var(--border-color)' }} 
+                            />
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', wordBreak: 'break-all' }}>
+                              Public URL: <a href={vid.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', textDecoration: 'none' }}>{vid.url}</a>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
