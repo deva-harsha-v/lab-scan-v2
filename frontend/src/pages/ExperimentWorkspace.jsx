@@ -1785,6 +1785,9 @@ export default function ExperimentWorkspace() {
                           controlsList="nodownload"
                           style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000000', outline: 'none', display: 'block' }}
                           src={parseEmbedVideoUrl(activeVideo)}
+                          onPlay={() => setManualPlaying(true)}
+                          onPause={() => setManualPlaying(false)}
+                          onEnded={() => setManualPlaying(false)}
                         />
                       ) : (activeVideo.url.includes('drive.google.com') || activeVideo.url.includes('docs.google.com')) ? (
                         <iframe 
