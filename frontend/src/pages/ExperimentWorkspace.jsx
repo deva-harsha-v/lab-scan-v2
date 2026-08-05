@@ -1740,21 +1740,30 @@ export default function ExperimentWorkspace() {
                             Open Resource Link <ChevronRight size={12} />
                           </a>
                         </div>
-                      ) : getGoogleDriveFileId(activeVideo.url) ? (
-                        <video 
-                          ref={videoRef}
-                          controls
-                          controlsList="nodownload"
-                          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000000', outline: 'none', display: 'block' }}
-                          src={`https://drive.google.com/uc?id=${getGoogleDriveFileId(activeVideo.url)}`}
-                        />
+                      ) : (activeVideo.url.includes('drive.google.com') || activeVideo.url.includes('docs.google.com')) ? (
+                        <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: '#000000' }}>
+                          <iframe 
+                            loading="lazy"
+                            src={parseEmbedVideoUrl(activeVideo)}
+                            title={activeVideo.title}
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            style={{ 
+                              position: 'absolute', 
+                              top: '-56px', 
+                              left: 0, 
+                              width: '100%', 
+                              height: 'calc(100% + 56px)', 
+                              border: '0', 
+                              display: 'block' 
+                            }}
+                          />
+                        </div>
                       ) : (
                         <iframe 
                           loading="lazy"
-                          src={(parseEmbedVideoUrl(activeVideo).includes('drive.google.com') || parseEmbedVideoUrl(activeVideo).includes('docs.google.com')) 
-                            ? parseEmbedVideoUrl(activeVideo) 
-                            : `${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`
-                          }
+                          src={`${parseEmbedVideoUrl(activeVideo)}${parseEmbedVideoUrl(activeVideo).includes('?') ? '&' : '?'}start=${videoTimeOffset}`}
                           title={activeVideo.title}
                           frameBorder="0"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
