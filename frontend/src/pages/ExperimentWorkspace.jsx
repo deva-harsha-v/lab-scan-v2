@@ -56,6 +56,8 @@ export default function ExperimentWorkspace() {
     procedure: true
   });
 
+  const videoRef = React.useRef(null);
+
   // Initialize Enforced Timer Hook
   const {
     watchedSeconds,
@@ -69,7 +71,7 @@ export default function ExperimentWorkspace() {
     videoId: activeVideo?.id,
     initialProgress: session?.current_video_progress?.[activeVideo?.id] || 0,
     minDuration: activeVideo?.min_duration || 60,
-    videoRef: null
+    videoRef: videoRef
   });
 
   // Load experiment and session
@@ -193,6 +195,16 @@ export default function ExperimentWorkspace() {
     setManualPlaying(false);
     setVideoTimeOffset(0);
     setActiveVideo(vid);
+  };
+
+  const getGoogleDriveFileId = (url) => {
+    if (!url) return null;
+    const rawUrl = url.trim();
+    const fileIdMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch && fileIdMatch[1]) return fileIdMatch[1];
+    const idMatch = rawUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) return idMatch[1];
+    return null;
   };
 
   // Safe Video Embed Parser (Prevents YouTube 'Video Unavailable' error)
@@ -1660,25 +1672,34 @@ export default function ExperimentWorkspace() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <button
                             onClick={() => setManualPlaying(!isPlaying)}
-                            className="academic-btn pill"
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              width: '36px',
-                              height: '36px',
-                              padding: 0,
+                              width: '40px',
+                              height: '40px',
                               borderRadius: '50%',
-                              background: isPlaying ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                              border: '1px solid ' + (isPlaying ? 'var(--danger-red)' : 'var(--success-emerald)'),
+                              background: isPlaying ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                              border: `2px solid ${isPlaying ? 'var(--danger-red)' : 'var(--success-emerald)'}`,
                               color: isPlaying ? 'var(--danger-red)' : 'var(--success-emerald)',
                               cursor: 'pointer',
                               transition: 'all 0.2s ease',
-                              flexShrink: 0
+                              flexShrink: 0,
+                              outline: 'none',
+                              padding: 0,
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                            }}
+                            onMouseOver={(e) => {
+                              e.currentTarget.style.background = isPlaying ? 'rgba(239, 68, 68, 0.22)' : 'rgba(16, 185, 129, 0.22)';
+                              e.currentTarget.style.transform = 'scale(1.08)';
+                            }}
+                            onMouseOut={(e) => {
+                              e.currentTarget.style.background = isPlaying ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)';
+                              e.currentTarget.style.transform = 'scale(1)';
                             }}
                             title={isPlaying ? 'Pause Timer' : 'Start Timer'}
                           >
-                            {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+                            {isPlaying ? <Pause size={18} style={{ strokeWidth: 3 }} /> : <Play size={18} style={{ strokeWidth: 3, fill: 'currentColor' }} />}
                           </button>
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '12px', color: isCurrentVideoCompleted ? 'var(--success-emerald)' : 'var(--text-secondary)', fontWeight: 600 }}>
@@ -1719,6 +1740,14 @@ export default function ExperimentWorkspace() {
                             Open Resource Link <ChevronRight size={12} />
                           </a>
                         </div>
+                      ) : getGoogleDriveFileId(activeVideo.url) ? (
+                        <video 
+                          ref={videoRef}
+                          controls
+                          controlsList="nodownload"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000000', outline: 'none', display: 'block' }}
+                          src={`https://drive.google.com/uc?id=${getGoogleDriveFileId(activeVideo.url)}`}
+                        />
                       ) : (
                         <iframe 
                           loading="lazy"
