@@ -1167,11 +1167,6 @@ export default function Landing() {
                   
                   <div style={{ width: '100%', height: '100%', background: isDark ? '#050c14' : '#f1f5f9', borderRadius: 16, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
                     <img src="/profile.jpeg" alt="Deva Harsha Veerla" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isDark ? 0.9 : 1.0 }} />
-                    
-                    {/* Micro Badge Link */}
-                    <div style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(6, 182, 212, 0.15)', backdropFilter: 'blur(12px)', padding: '6px 12px', borderRadius: 20, border: '1px solid rgba(6,182,212,0.3)' }}>
-                      <div style={{ fontFamily: font.mono, fontSize: 8, color: '#06b6d4', fontWeight: 700, letterSpacing: '0.05em' }}>YC W26 PATTERN</div>
-                    </div>
                   </div>
                 </div>
 
@@ -1207,8 +1202,8 @@ export default function Landing() {
                 </h2>
 
                 <div style={{ fontSize: 15, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 36, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <p>I upgraded LabScan to decoupled v2 modules because institutional setups require structural execution proof systems. I minimized middle-tier management entirely: Admins fully govern institutional layouts, leaving standard operational access strictly to Students and Ghost inspecting terminals.</p>
-                  <p>As a full-stack engineer working in Next.js, React, and TypeScript, I rewrote the tracking matrices so that content validation occurs securely via secure hardware keys natively.</p>
+                  <p>I engineered LabScan because manual check-in sheets and delayed grading output arrays inside college blocks are fundamentally broken. Dealing with physical logs shouldn't delay real laboratory experimentation time.</p>
+                <p>As a Full-Stack Web Engineer specializing in Next.js, React, and TypeScript alongside multi-agent AI framework research, I built this operating infrastructure from the ground up to bring absolute transparency to academic records data tracking.</p>
                 </div>
 
                 {/* Signature + Profile Footer Wrapper */}
@@ -1280,11 +1275,6 @@ export default function Landing() {
                 <span className="navlink" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>Features</span>
                 <span className="navlink" onClick={() => document.getElementById('workflow')?.scrollIntoView({ behavior: 'smooth' })}>Workflow</span>
                 <span className="navlink" onClick={() => document.getElementById('creator')?.scrollIntoView({ behavior: 'smooth' })}>Creator Story</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontFamily: font.mono, fontSize: 11, color: 'var(--text-primary)', fontWeight: 700 }}>NETWORKS</span>
-                <a href="https://github.com/deva-harsha-v" target="_blank" rel="noreferrer" className="navlink">GitHub</a>
-                <a href="https://linkedin.com/in/devaharshaveerla" target="_blank" rel="noreferrer" className="navlink">LinkedIn</a>
               </div>
             </div>
           </div>
