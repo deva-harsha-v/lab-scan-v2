@@ -794,7 +794,6 @@ export default function Landing() {
             <span className="navlink" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>Features</span>
             <span className="navlink" onClick={() => document.getElementById('showcase')?.scrollIntoView({ behavior: 'smooth' })}>Showcase</span>
             <span className="navlink" onClick={() => document.getElementById('workflow')?.scrollIntoView({ behavior: 'smooth' })}>Workflow</span>
-            <span className="navlink" onClick={() => document.getElementById('creator')?.scrollIntoView({ behavior: 'smooth' })}>Creator Story</span>
           </div>
 
           {/* CTA */}
@@ -1146,97 +1145,6 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* ── CREATOR SECTION ─────────────────────────────────────────── */}
-        <section id="creator" style={{ width: '100%', padding: '100px 24px', background: 'var(--bg-primary)', borderTop: '1px solid var(--border-color)', position: 'relative', zIndex: 1, transition: 'background 0.3s ease' }}>
-          <div style={{ maxWidth: 1140, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 64, alignItems: 'start' }}>
-            
-            {/* Left Column — Startup Portrait Hub */}
-            <ScrollReveal direction="left">
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{
-                  position: 'relative', width: 300, height: 360,
-                  borderRadius: 24, padding: 12,
-                  transform: 'perspective(1000px) rotateY(6deg) rotateX(3deg)',
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--border-color)',
-                  boxShadow: 'var(--glass-shadow)',
-                  animation: 'float3d 7s ease-in-out infinite'
-                }}>
-                  {/* Dynamic Cyan Aura Glow Backdrops */}
-                  <div style={{ position: 'absolute', inset: -4, borderRadius: 28, padding: 2, background: 'linear-gradient(135deg, #06b6d4, transparent, #3b82f6)', opacity: isDark ? 0.8 : 0.4, zIndex: 0, animation: 'auraGlow 4s ease-in-out infinite' }} />
-                  
-                  <div style={{ width: '100%', height: '100%', background: isDark ? '#050c14' : '#f1f5f9', borderRadius: 16, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-                    <img src="/profile.jpeg" alt="Deva Harsha Veerla" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isDark ? 0.9 : 1.0 }} />
-                  </div>
-                </div>
-
-                {/* Mini Metrics Showcase Row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: 300, marginTop: 24 }}>
-                  <div style={{ padding: '14px', background: 'var(--glass-bg)', border: '1px solid var(--border-color)', borderRadius: 12, textAlign: 'center' }}>
-                    <div style={{ fontFamily: font.mono, fontSize: 16, fontWeight: 700, color: '#06b6d4' }}>120+</div>
-                    <div style={{ fontSize: 8, fontFamily: font.mono, color: 'var(--text-muted)', marginTop: 2 }}>LEETCODE SOLVED</div>
-                  </div>
-                  <div style={{ padding: '14px', background: 'var(--glass-bg)', border: '1px solid var(--border-color)', borderRadius: 12, textAlign: 'center' }}>
-                    <div style={{ fontFamily: font.mono, fontSize: 16, fontWeight: 700, color: 'var(--accent-green)' }}>API-First</div>
-                    <div style={{ fontSize: 8, fontFamily: font.mono, color: 'var(--text-muted)', marginTop: 2 }}>ARCHITECTURE</div>
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* Right Column — Founder Narrative Frame */}
-            <ScrollReveal direction="right">
-              <div style={{ position: 'relative' }}>
-                
-                {/* Trust Badge */}
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 100, marginBottom: 20 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-blue)' }} />
-                  <span style={{ fontFamily: font.mono, fontSize: 9, color: 'var(--accent-blue)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Built for scale, maintained by admin</span>
-                </div>
-
-                <div style={{ fontFamily: font.mono, fontSize: 11, letterSpacing: '0.15em', color: '#06b6d4', textTransform: 'uppercase', marginBottom: 12, fontWeight: 700 }}>LEAD DEVELOPER STATEMENT</div>
-                
-                {/* Quote-style Headline */}
-                <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 'clamp(24px, 3.5vw, 40px)', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1, marginBottom: 28 }}>
-                  “Engineering labs shouldn't run on loose paper maps and broken spreadsheets.”
-                </h2>
-
-                <div style={{ fontSize: 15, color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 36, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <p>I engineered LabScan because manual check-in sheets and delayed grading output arrays inside college blocks are fundamentally broken. Dealing with physical logs shouldn't delay real laboratory experimentation time.</p>
-                <p>As a Full-Stack Web Engineer specializing in Next.js, React, and TypeScript alongside multi-agent AI framework research, I built this operating infrastructure from the ground up to bring absolute transparency to academic records data tracking.</p>
-                </div>
-
-                {/* Signature + Profile Footer Wrapper */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 24, borderTop: '1px solid var(--border-color)', paddingTop: 24 }}>
-                  <div>
-                    {/* Cursive Signature */}
-                    <div style={{ fontFamily: "'Herr Von Muellerhoff', cursive", fontSize: 54, color: '#06b6d4', lineHeight: 0.6, opacity: 0.85, marginBottom: 8, userSelect: 'none' }}>
-                      Deva Harsha Veerla
-                    </div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>Deva Harsha Veerla</div>
-                    <div style={{ fontSize: 11, fontFamily: font.mono, color: 'var(--text-muted)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Lead Full-Stack Engineer</div>
-                  </div>
-
-                  {/* Social links */}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    {[
-                      { label: 'GitHub',    href: 'https://github.com/deva-harsha-v' },
-                      { label: 'LinkedIn',  href: 'https://linkedin.com/in/devaharshaveerla' },
-                      { label: 'Portfolio', href: 'https://devaharshadev.netlify.app/' }
-                    ].map((link, i) => (
-                      <a key={i} href={link.href} target="_blank" rel="noreferrer" className="navlink" style={{
-                        background: 'var(--glass-bg)', border: '1px solid var(--border-color)',
-                        padding: '10px 18px', borderRadius: 10, transition: 'var(--transition-fast)', fontSize: 11
-                      }}>{link.label}</a>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-            </ScrollReveal>
-          </div>
-        </section>
-
         {/* ── FINAL CTA ─────────────────────────────────────────────────── */}
         <section style={{ width: '100%', padding: '100px 24px 140px', textAlign: 'center', position: 'relative', zIndex: 1 }}>
           <div style={{ position: 'absolute', bottom: '5%', left: '50%', transform: 'translateX(-50%) perspective(400px) rotateX(60deg)', width: 600, height: 100, background: 'radial-gradient(ellipse, rgba(56,189,248,0.15) 0%, transparent 70%)', filter: 'blur(20px)', pointerEvents: 'none' }} />
@@ -1274,13 +1182,12 @@ export default function Landing() {
                 <span style={{ fontFamily: font.mono, fontSize: 11, color: 'var(--text-primary)', fontWeight: 700 }}>STRUCTURE</span>
                 <span className="navlink" onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}>Features</span>
                 <span className="navlink" onClick={() => document.getElementById('workflow')?.scrollIntoView({ behavior: 'smooth' })}>Workflow</span>
-                <span className="navlink" onClick={() => document.getElementById('creator')?.scrollIntoView({ behavior: 'smooth' })}>Creator Story</span>
               </div>
             </div>
           </div>
           <div className="footer-bottom" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: 20, fontSize: 11, fontFamily: font.mono, color: 'var(--text-muted)' }}>
             <span>© 2026 LabScan. All rights reserved.</span>
-            <span>Built by Deva Harsha Veerla</span>
+            <span>Built for St. Jude Engineering College</span>
           </div>
         </footer>
 
