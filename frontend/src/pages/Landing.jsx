@@ -718,8 +718,8 @@ export default function Landing() {
           .nav-signin, .nav-admin-signin {
             width: 100% !important;
             text-align: center !important;
-            padding: 10px 16px !important;
-            font-size: 12px !important;
+            padding: 8px 14px !important;
+            font-size: 11px !important;
             white-space: nowrap !important;
             border-radius: 10px !important;
           }
@@ -776,13 +776,13 @@ export default function Landing() {
           <div
             className="nav-logo"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
           >
-            <LabScanLogo size={28} />
+            <LabScanLogo size={36} />
             <span
               style={{
-                fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: '1.25rem',
-                letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1
+                fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: '1.85rem',
+                letterSpacing: '-0.04em', color: 'var(--text-primary)', lineHeight: 1
               }}
             >
               LabScan
@@ -804,10 +804,10 @@ export default function Landing() {
               className="glowbtn nav-signin"
               onClick={() => navigate('/login')}
               style={{
-                ...BTN_BASE, padding: '8px 16px', background: 'var(--bg-secondary)',
+                ...BTN_BASE, padding: '7px 14px', background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)', borderRadius: 10,
-                color: 'var(--text-primary)', fontSize: '12px', fontWeight: 700,
-                backdropFilter: 'blur(12px)'
+                color: 'var(--text-primary)', fontSize: '11px', fontWeight: 700,
+                backdropFilter: 'blur(12px)', textTransform: 'uppercase', letterSpacing: '0.08em'
               }}
             >
               Sign In
@@ -816,10 +816,10 @@ export default function Landing() {
               className="glowbtn nav-admin-signin"
               onClick={() => navigate('/admin/login')}
               style={{
-                ...BTN_BASE, padding: '8px 16px', background: 'rgba(59,130,246,0.1)',
+                ...BTN_BASE, padding: '7px 14px', background: 'rgba(59,130,246,0.1)',
                 border: '1px solid var(--accent-blue)', borderRadius: 10,
-                color: 'var(--accent-blue)', fontSize: '12px', fontWeight: 700,
-                backdropFilter: 'blur(12px)'
+                color: 'var(--accent-blue)', fontSize: '11px', fontWeight: 700,
+                backdropFilter: 'blur(12px)', textTransform: 'uppercase', letterSpacing: '0.08em'
               }}
             >
               Admin Portal

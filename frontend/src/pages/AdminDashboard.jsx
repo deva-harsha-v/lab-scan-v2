@@ -134,6 +134,7 @@ export default function AdminDashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [importData, setImportData] = useState([]);
   const [importPreview, setImportPreview] = useState(null);
+  const [importConfirmation, setImportConfirmation] = useState(null);
 
   useEffect(() => {
     if (!importFile) {
@@ -414,6 +415,7 @@ export default function AdminDashboard() {
         body: JSON.stringify({ full_name, roll_number, branch_id, password })
       });
       setStudentForm({ full_name: '', roll_number: '', branch_id: '', password: '' });
+      setImportConfirmation({ type: 'single' });
       loadStudentsData(studentsPage, studentsSearch, studentsBranchFilter, studentsPwFilter);
     } catch (err) {
       alert(err.message);
@@ -577,6 +579,15 @@ export default function AdminDashboard() {
       setImportData([]);
       setImportFile(null);
       setImportPassword('');
+      setImportConfirmation({
+        type: 'bulk',
+        importedCount: response.summary.importedCount,
+        duplicatesCount: response.summary.duplicatesCount,
+        invalidCount: response.summary.invalidCount,
+        total: response.summary.total,
+        duplicates: response.duplicates || [],
+        invalidRows: response.invalidRows || []
+      });
       loadStudentsData(studentsPage, studentsSearch, studentsBranchFilter, studentsPwFilter);
     } catch (err) {
       alert('Failed executing bulk import: ' + err.message);
@@ -2569,6 +2580,88 @@ export default function AdminDashboard() {
                 }}
               >
                 <Layers size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Import Confirmation Modal */}
+      {importConfirmation && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'var(--glass-bg)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '24px',
+            padding: '32px',
+            width: '100%',
+            maxWidth: '540px',
+            boxShadow: 'var(--glass-shadow)',
+            position: 'relative',
+            textAlign: 'left'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ display: 'inline-flex', padding: '6px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid var(--accent-green)', borderRadius: '8px', color: 'var(--accent-green)' }}>✓</span>
+              {importConfirmation.type === 'single' ? 'Student Added Successfully' : 'Bulk Import Completed'}
+            </h3>
+
+            {importConfirmation.type === 'single' ? (
+              <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                The student account was successfully created and configured.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '0 0 24px' }}>
+                <div style={{ background: 'var(--surface-l1)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', textAlign: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--accent-green)' }}>{importConfirmation.importedCount}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '2px', fontWeight: 600 }}>Imported</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: importConfirmation.duplicatesCount > 0 ? 'var(--warning-amber)' : 'var(--text-muted)' }}>{importConfirmation.duplicatesCount}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '2px', fontWeight: 600 }}>Duplicates</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '20px', fontWeight: 800, color: importConfirmation.invalidCount > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{importConfirmation.invalidCount}</div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '2px', fontWeight: 600 }}>Invalid Rows</div>
+                  </div>
+                </div>
+
+                {importConfirmation.duplicatesCount > 0 && (
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.04)', padding: '12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--warning-amber)', marginBottom: '6px' }}>Duplicate Entries Skipped (Already Exist):</div>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '11.5px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {importConfirmation.duplicates.map((d, idx) => (
+                        <li key={idx}>Row {d.row}: Roll {d.roll_number} ({d.error})</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {importConfirmation.invalidCount > 0 && (
+                  <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.04)', padding: '12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-red)', marginBottom: '6px' }}>Invalid Rows Skipped (Incorrect Format):</div>
+                    <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '11.5px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {importConfirmation.invalidRows.map((r, idx) => (
+                        <li key={idx}>Row {r.row}: {r.error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="academic-btn btn-academic-primary pill"
+                style={{ padding: '8px 24px', cursor: 'pointer' }}
+                onClick={() => setImportConfirmation(null)}
+              >
+                Dismiss
               </button>
             </div>
           </div>
