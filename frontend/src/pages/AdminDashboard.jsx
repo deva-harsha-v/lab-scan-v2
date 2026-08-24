@@ -616,6 +616,26 @@ export default function AdminDashboard() {
     XLSX.writeFile(workbook, "labscan_student_import_template.xlsx");
   };
 
+  const exportQuestionnaireReport = async () => {
+    try {
+      const studentsData = await apiFetch('/auth/students?limit=500');
+      const exportRows = (studentsData.students || []).map(st => ({
+        "Student Name": st.full_name,
+        "Roll Number": st.roll_number,
+        "Academic Branch": st.branch_name || 'Unassigned',
+        "Registration Date": new Date(st.created_at).toLocaleDateString(),
+        "Account Status": st.lockout_until && new Date(st.lockout_until) > new Date() ? 'Locked Out' : 'Active'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Student Roster & Progress");
+      XLSX.writeFile(workbook, "labscan_student_questionnaire_roster_report.xlsx");
+    } catch (err) {
+      alert('Failed generating export report: ' + err.message);
+    }
+  };
+
   const downloadImportErrorReport = (target = importResult) => {
     if (!target) return;
     let content = "=== LabScan Excel Import Error Report ===\n\n";
@@ -2325,6 +2345,7 @@ export default function AdminDashboard() {
                       value={institution.short_name}
                       onChange={(e) => setInstitution({ ...institution, short_name: e.target.value })}
                       placeholder="e.g. SJU"
+                      required
                     />
                   </div>
 

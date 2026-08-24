@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { apiFetch, getUser } from '../utils/api';
 import { 
   ArrowLeft, Heading, AlignLeft, AlertTriangle, HelpCircle, 
-  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles, Upload 
+  Video, CheckSquare, ChevronUp, ChevronDown, Trash, Save, Sparkles, Upload,
+  BookOpen, Link, FileText, HelpCircle as QuestionIcon
 } from 'lucide-react';
 import LabScanLogo from '../components/LabScanLogo';
 import Skeleton from '../components/Skeleton';
@@ -17,6 +18,10 @@ export default function AdminEditor() {
   const [theoryBlocks, setTheoryBlocks] = useState([]);
   const [videoLinks, setVideoLinks] = useState([]);
   const [checklistItems, setChecklistItems] = useState([]);
+  const [questionnaireItems, setQuestionnaireItems] = useState([]);
+  const [bookReferences, setBookReferences] = useState([]);
+  const [virtualLabLinks, setVirtualLabLinks] = useState([]);
+  const [manualDocuments, setManualDocuments] = useState([]);
   const [versionNumber, setVersionNumber] = useState(1);
   
   const [loading, setLoading] = useState(true);
@@ -35,6 +40,10 @@ export default function AdminEditor() {
         setTheoryBlocks(data.content.theory_procedure_json || []);
         setVideoLinks(data.content.video_links || []);
         setChecklistItems(data.content.checklist_items.map(item => item.item_text) || []);
+        setQuestionnaireItems(data.content.questionnaire_items || []);
+        setBookReferences(data.content.book_references || []);
+        setVirtualLabLinks(data.content.virtual_lab_links || []);
+        setManualDocuments(data.content.manual_documents || []);
         setVersionNumber(data.content.version_number || 1);
         setLoading(false);
       })
@@ -121,15 +130,79 @@ export default function AdminEditor() {
     setChecklistItems(updated);
   };
 
+  // --- Questionnaire Handlers (Max 5) ---
+  const addQuestionnaireItem = () => {
+    if (questionnaireItems.length >= 5) {
+      alert('Maximum of 5 questionnaire questions allowed per experiment.');
+      return;
+    }
+    setQuestionnaireItems([
+      ...questionnaireItems,
+      { question_text: '', question_type: 'boolean', question_order: questionnaireItems.length + 1 }
+    ]);
+  };
+
+  const updateQuestionnaireItem = (index, field, value) => {
+    setQuestionnaireItems(prev => prev.map((q, i) => i === index ? { ...q, [field]: value } : q));
+  };
+
+  const removeQuestionnaireItem = (index) => {
+    const updated = questionnaireItems.filter((_, i) => i !== index).map((q, i) => ({ ...q, question_order: i + 1 }));
+    setQuestionnaireItems(updated);
+  };
+
+  // --- Book References Handlers ---
+  const addBookReference = () => {
+    setBookReferences([...bookReferences, { title: '', author: '', link: '' }]);
+  };
+
+  const updateBookReference = (index, field, value) => {
+    setBookReferences(prev => prev.map((b, i) => i === index ? { ...b, [field]: value } : b));
+  };
+
+  const removeBookReference = (index) => {
+    setBookReferences(bookReferences.filter((_, i) => i !== index));
+  };
+
+  // --- Virtual Lab Links Handlers ---
+  const addVirtualLabLink = () => {
+    setVirtualLabLinks([...virtualLabLinks, { title: '', url: '', provider_name: '', description: '' }]);
+  };
+
+  const updateVirtualLabLink = (index, field, value) => {
+    setVirtualLabLinks(prev => prev.map((vl, i) => i === index ? { ...vl, [field]: value } : vl));
+  };
+
+  const removeVirtualLabLink = (index) => {
+    setVirtualLabLinks(virtualLabLinks.filter((_, i) => i !== index));
+  };
+
+  // --- Manual Documents Handlers ---
+  const addManualDocument = () => {
+    setManualDocuments([...manualDocuments, { title: '', document_url: '', file_type: 'pdf' }]);
+  };
+
+  const updateManualDocument = (index, field, value) => {
+    setManualDocuments(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d));
+  };
+
+  const removeManualDocument = (index) => {
+    setManualDocuments(manualDocuments.filter((_, i) => i !== index));
+  };
+
   // --- Save / Publish ---
   const handleSave = async () => {
     // Validate empty links or fields
     const hasEmptyBlocks = theoryBlocks.some(b => !b.text.trim());
     const hasEmptyVideos = videoLinks.some(v => !v.url.trim() || !v.title.trim());
     const hasEmptyChecklist = checklistItems.some(i => !i.trim());
+    const hasEmptyQuestions = questionnaireItems.some(q => !q.question_text.trim());
+    const hasEmptyBooks = bookReferences.some(b => !b.title.trim() || !b.link.trim());
+    const hasEmptyVirtualLabs = virtualLabLinks.some(vl => !vl.title.trim() || !vl.url.trim());
+    const hasEmptyManuals = manualDocuments.some(d => !d.title.trim() || !d.document_url.trim());
 
-    if (hasEmptyBlocks || hasEmptyVideos || hasEmptyChecklist) {
-      if (!confirm('You have empty content fields. These will be published as blank values. Continue?')) {
+    if (hasEmptyBlocks || hasEmptyVideos || hasEmptyChecklist || hasEmptyQuestions || hasEmptyBooks || hasEmptyVirtualLabs || hasEmptyManuals) {
+      if (!confirm('You have empty or incomplete content fields. These will be published as blank/default values. Continue?')) {
         return;
       }
     }
@@ -142,7 +215,11 @@ export default function AdminEditor() {
         ar_qr_marker_id: experiment.ar_qr_marker_id,
         theory_procedure_json: theoryBlocks,
         video_links: videoLinks,
-        checklist_items: checklistItems
+        checklist_items: checklistItems,
+        questionnaire_items: questionnaireItems.map((q, i) => ({ ...q, question_order: i + 1 })),
+        book_references: bookReferences,
+        virtual_lab_links: virtualLabLinks,
+        manual_documents: manualDocuments
       };
 
       const result = await apiFetch(`/experiments/${experimentId}`, {
@@ -263,10 +340,22 @@ export default function AdminEditor() {
               </button>
             </div>
 
-            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Other Stages</h3>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Other Stages & Resources</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addVideoLink}>
                 <Video size={16} /> Add Video Resource
+              </button>
+              <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addBookReference}>
+                <BookOpen size={16} /> Add Book Reference
+              </button>
+              <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addManualDocument}>
+                <FileText size={16} /> Add Manual Document
+              </button>
+              <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addQuestionnaireItem} disabled={questionnaireItems.length >= 5}>
+                <QuestionIcon size={16} /> Add Question ({questionnaireItems.length}/5)
+              </button>
+              <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addVirtualLabLink}>
+                <Link size={16} /> Add Virtual Lab Link
               </button>
               <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', fontSize: '0.85rem' }} onClick={addChecklistItem}>
                 <CheckSquare size={16} /> Add Checklist Item
@@ -348,6 +437,99 @@ export default function AdminEditor() {
                   </div>
                 )}
               </div>
+
+              {/* Book References Sub-Section */}
+              <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', color: '#f8fafc', marginBottom: '14px' }}>
+                  <BookOpen size={18} style={{ color: 'var(--accent-blue)' }} /> Book References (Displayed in Learn Stage)
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {bookReferences.map((book, index) => (
+                    <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                      <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
+                        <input 
+                          type="text"
+                          className="form-input"
+                          value={book.title || ''}
+                          onChange={(e) => updateBookReference(index, 'title', e.target.value)}
+                          placeholder="Book Title (e.g. Physics for Engineers)"
+                        />
+                        <input 
+                          type="text"
+                          className="form-input"
+                          value={book.author || ''}
+                          onChange={(e) => updateBookReference(index, 'author', e.target.value)}
+                          placeholder="Author(s) (e.g. Halliday & Resnick)"
+                        />
+                      </div>
+                      <input 
+                        type="text"
+                        className="form-input"
+                        value={book.link || ''}
+                        onChange={(e) => updateBookReference(index, 'link', e.target.value)}
+                        placeholder="Reference URL (e.g. https://...)"
+                      />
+                      <div className="editor-block-controls" style={{ top: '16px', right: '16px' }}>
+                        <button className="editor-block-btn" style={{ color: 'var(--accent-red)' }} onClick={() => removeBookReference(index)}>
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {bookReferences.length === 0 && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No book references added yet. Click "Add Book Reference" on dock.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Manual Documents Sub-Section */}
+              <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', color: '#f8fafc', marginBottom: '14px' }}>
+                  <FileText size={18} style={{ color: 'var(--accent-blue)' }} /> Lab Manuals & Instructions (PDF Viewer Link)
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {manualDocuments.map((doc, index) => (
+                    <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                      <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
+                        <input 
+                          type="text"
+                          className="form-input"
+                          value={doc.title || ''}
+                          onChange={(e) => updateManualDocument(index, 'title', e.target.value)}
+                          placeholder="Document Title (e.g. Experiment 4 Lab Manual)"
+                        />
+                        <select 
+                          className="form-input"
+                          value={doc.file_type || 'pdf'}
+                          onChange={(e) => updateManualDocument(index, 'file_type', e.target.value)}
+                        >
+                          <option value="pdf">PDF Document</option>
+                          <option value="link">Web Document</option>
+                        </select>
+                      </div>
+                      <input 
+                        type="text"
+                        className="form-input"
+                        value={doc.document_url || ''}
+                        onChange={(e) => updateManualDocument(index, 'document_url', e.target.value)}
+                        placeholder="Document URL (e.g. https://drive.google.com/.../view or direct PDF URL)"
+                      />
+                      <div className="editor-block-controls" style={{ top: '16px', right: '16px' }}>
+                        <button className="editor-block-btn" style={{ color: 'var(--accent-red)' }} onClick={() => removeManualDocument(index)}>
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {manualDocuments.length === 0 && (
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No manual documents added yet. Click "Add Manual Document" on dock.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Stage 2: Video resources */}
@@ -410,10 +592,114 @@ export default function AdminEditor() {
               </div>
             </div>
 
-            {/* Stage 3: Checklist Items */}
+            {/* Stage 3: Questionnaire (5 Questions Max) */}
+            <div className="glass-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                  <QuestionIcon size={22} style={{ color: 'var(--accent-blue)' }} /> Stage 3: Experiment Questionnaire ({questionnaireItems.length}/5 Questions)
+                </h3>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={addQuestionnaireItem} disabled={questionnaireItems.length >= 5}>
+                  + Add Question
+                </button>
+              </div>
+              
+              <div className="editor-workspace" style={{ minHeight: '120px' }}>
+                {questionnaireItems.map((q, index) => (
+                  <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-blue)' }}>
+                        Question #{index + 1}
+                      </span>
+                      <select 
+                        className="form-input" 
+                        style={{ width: '180px', padding: '4px 8px', fontSize: '0.85rem' }}
+                        value={q.question_type}
+                        onChange={(e) => updateQuestionnaireItem(index, 'question_type', e.target.value)}
+                      >
+                        <option value="boolean">Yes / No (Boolean)</option>
+                        <option value="text">Short Text / Objective</option>
+                      </select>
+                    </div>
+
+                    <input 
+                      type="text" 
+                      className="form-input"
+                      value={q.question_text || ''}
+                      onChange={(e) => updateQuestionnaireItem(index, 'question_text', e.target.value)}
+                      placeholder={`Enter question text (e.g. ${q.question_type === 'boolean' ? 'Did you observe resonance at 50Hz?' : 'What was the calculated wavelength?'})`}
+                    />
+
+                    <div className="editor-block-controls" style={{ top: '16px', right: '16px' }}>
+                      <button className="editor-block-btn" style={{ color: 'var(--accent-red)' }} onClick={() => removeQuestionnaireItem(index)}>
+                        <Trash size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {questionnaireItems.length === 0 && (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                    No questionnaire questions added yet. Click "Add Question" in dock to add up to 5 questions.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Virtual Lab External Links Section */}
+            <div className="glass-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                  <Link size={22} style={{ color: 'var(--accent-blue)' }} /> Virtual Lab External Links
+                </h3>
+                <button className="btn btn-secondary" style={{ fontSize: '0.8rem' }} onClick={addVirtualLabLink}>
+                  + Add Link
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {virtualLabLinks.map((vl, index) => (
+                  <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                    <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
+                      <input 
+                        type="text"
+                        className="form-input"
+                        value={vl.title || ''}
+                        onChange={(e) => updateVirtualLabLink(index, 'title', e.target.value)}
+                        placeholder="Link Title (e.g. Interactive Circuit Simulator)"
+                      />
+                      <input 
+                        type="text"
+                        className="form-input"
+                        value={vl.provider_name || ''}
+                        onChange={(e) => updateVirtualLabLink(index, 'provider_name', e.target.value)}
+                        placeholder="Provider (e.g. PhET Interactive Simulations)"
+                      />
+                    </div>
+                    <input 
+                      type="text"
+                      className="form-input"
+                      value={vl.url || ''}
+                      onChange={(e) => updateVirtualLabLink(index, 'url', e.target.value)}
+                      placeholder="Virtual Lab URL (e.g. https://phet.colorado.edu/...)"
+                    />
+                    <div className="editor-block-controls" style={{ top: '16px', right: '16px' }}>
+                      <button className="editor-block-btn" style={{ color: 'var(--accent-red)' }} onClick={() => removeVirtualLabLink(index)}>
+                        <Trash size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {virtualLabLinks.length === 0 && (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px' }}>
+                    No virtual lab links added yet. Click "Add Virtual Lab Link" in dock.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Stage 4: Checklist Items */}
             <div className="glass-panel">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                <CheckSquare size={22} style={{ color: 'var(--accent-blue)' }} /> Stage 3: Verification Checklist
+                <CheckSquare size={22} style={{ color: 'var(--accent-blue)' }} /> Stage 4: Verification Checklist
               </h3>
               
               <div className="editor-workspace" style={{ minHeight: '150px' }}>

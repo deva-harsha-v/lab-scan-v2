@@ -5,11 +5,13 @@ import { useEnforcedTimer } from '../hooks/useEnforcedTimer';
 import ThemeToggle from '../components/ThemeToggle';
 import LabScanLogo from '../components/LabScanLogo';
 import ArucoScanner from '../components/ArucoScanner';
+import DocumentViewerModal from '../components/DocumentViewerModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowLeft, BookOpen, AlertTriangle, 
   CheckCircle2, ChevronRight, Clock, Hash, FileText, 
-  ChevronDown, ChevronUp, Edit3, Play, Pause, ShieldCheck, Camera, Lock
+  ChevronDown, ChevronUp, Edit3, Play, Pause, ShieldCheck, Camera, Lock,
+  ExternalLink, HelpCircle as QuestionIcon, Link as LinkIcon
 } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
 
@@ -30,6 +32,20 @@ export default function ExperimentWorkspace() {
   const [videoLinks, setVideoLinks] = useState([]);
   const [checklistItems, setChecklistItems] = useState([]);
   
+  // Questionnaire & Resource States
+  const [questionnaireItems, setQuestionnaireItems] = useState([]);
+  const [questionnaireResponses, setQuestionnaireResponses] = useState({});
+  const [bookReferences, setBookReferences] = useState([]);
+  const [virtualLabLinks, setVirtualLabLinks] = useState([]);
+  const [manualDocuments, setManualDocuments] = useState([]);
+  const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
+  const [questionnaireSaved, setQuestionnaireSaved] = useState(false);
+
+  // Document Viewer Modal State
+  const [isDocumentViewerOpen, setIsDocumentViewerOpen] = useState(false);
+  const [selectedDocumentUrl, setSelectedDocumentUrl] = useState('');
+  const [selectedDocumentTitle, setSelectedDocumentTitle] = useState('');
+
   // Session tracking
   const [session, setSession] = useState(null);
   const [activeStage, setActiveStage] = useState('learning'); // learning, visual, checklist, complete
@@ -183,6 +199,10 @@ export default function ExperimentWorkspace() {
           setTheoryBlocks(data.content.theory_procedure_json || []);
           setVideoLinks(data.content.video_links || []);
           setChecklistItems(data.content.checklist_items || []);
+          setQuestionnaireItems(data.content.questionnaire_items || []);
+          setBookReferences(data.content.book_references || []);
+          setVirtualLabLinks(data.content.virtual_lab_links || []);
+          setManualDocuments(data.content.manual_documents || []);
           setActiveStage('learning');
           
           if (data.content.video_links?.length > 0) {
@@ -197,6 +217,7 @@ export default function ExperimentWorkspace() {
           }
 
           let activeSession;
+          let activeQuestionnaireData = [];
           try {
             const sessId = searchParams.get('sessionId');
             const url = sessId 
@@ -205,6 +226,7 @@ export default function ExperimentWorkspace() {
             const data = await apiFetch(url);
             activeSession = data.session;
             setChecklistItems(data.checklist || []);
+            activeQuestionnaireData = data.questionnaire || [];
           } catch (e) {
             // If no active session, start one
             const data = await apiFetch('/sessions/start', {
@@ -221,6 +243,20 @@ export default function ExperimentWorkspace() {
           setSession(activeSession);
           const detail = await apiFetch(`/experiments/${experimentId}?versionId=${activeSession.content_version_id}`);
           setExperiment(detail.experiment);
+
+          // Populate questionnaire responses from session data
+          if (activeQuestionnaireData && activeQuestionnaireData.length > 0) {
+            const respMap = {};
+            activeQuestionnaireData.forEach(q => {
+              if (q.answer_boolean !== null || q.answer_text !== null) {
+                respMap[q.question_id] = {
+                  answer_boolean: q.answer_boolean,
+                  answer_text: q.answer_text
+                };
+              }
+            });
+            setQuestionnaireResponses(respMap);
+          }
 
           // Sync ArUco verification from URL parameter with backend if not already saved in session
           if (searchParams.get('scanned') === 'true' && !activeSession.aruco_verified_at && detail.experiment) {
@@ -241,6 +277,10 @@ export default function ExperimentWorkspace() {
 
           setTheoryBlocks(detail.content.theory_procedure_json || []);
           setVideoLinks(detail.content.video_links || []);
+          setQuestionnaireItems(detail.content.questionnaire_items || []);
+          setBookReferences(detail.content.book_references || []);
+          setVirtualLabLinks(detail.content.virtual_lab_links || []);
+          setManualDocuments(detail.content.manual_documents || []);
 
           if (detail.content.video_links?.length > 0) {
             setActiveVideo(detail.content.video_links[0]);
@@ -283,6 +323,62 @@ export default function ExperimentWorkspace() {
     setManualPlaying(false);
     setVideoTimeOffset(0);
     setActiveVideo(vid);
+  };
+
+  // Questionnaire & Document Handlers
+  const handleAnswerBoolean = (qId, boolVal) => {
+    setQuestionnaireResponses(prev => ({
+      ...prev,
+      [qId]: { answer_boolean: boolVal, answer_text: null }
+    }));
+  };
+
+  const handleAnswerText = (qId, textVal) => {
+    setQuestionnaireResponses(prev => ({
+      ...prev,
+      [qId]: { answer_boolean: null, answer_text: textVal }
+    }));
+  };
+
+  const handleSaveQuestionnaire = async () => {
+    if (isGhostMode) {
+      alert('Questionnaire response recorded (Preview Mode).');
+      setQuestionnaireSaved(true);
+      return;
+    }
+    if (!session || !session.session_id) return;
+    const answersPayload = Object.entries(questionnaireResponses).map(([qId, ans]) => ({
+      question_id: qId,
+      answer_boolean: ans.answer_boolean,
+      answer_text: ans.answer_text
+    }));
+
+    if (answersPayload.length === 0) {
+      alert('Please answer at least one question before submitting.');
+      return;
+    }
+
+    setSavingQuestionnaire(true);
+    try {
+      await apiFetch('/sessions/questionnaire', {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: session.session_id,
+          answers: answersPayload
+        })
+      });
+      setSavingQuestionnaire(false);
+      setQuestionnaireSaved(true);
+    } catch (err) {
+      setSavingQuestionnaire(false);
+      alert('Failed to submit questionnaire: ' + err.message);
+    }
+  };
+
+  const openDocumentViewer = (doc) => {
+    setSelectedDocumentUrl(doc.document_url);
+    setSelectedDocumentTitle(doc.title);
+    setIsDocumentViewerOpen(true);
   };
 
 
@@ -1596,6 +1692,124 @@ export default function ExperimentWorkspace() {
                   )}
                 </div>
 
+                {/* 6. Manual Lab Documents (PDF Viewer) */}
+                {manualDocuments.length > 0 && (
+                  <div className="academic-section-card">
+                    <div className="section-header-bar" style={{ cursor: 'default' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <FileText size={18} style={{ color: 'var(--primary-blue)' }} /> Lab Manuals & Procedure Guides
+                      </span>
+                    </div>
+                    <div className="section-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {manualDocuments.map((doc, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '14px 18px',
+                          backgroundColor: 'var(--surface-l2)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <FileText size={20} style={{ color: 'var(--primary-blue)' }} />
+                            <div>
+                              <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{doc.title}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: font.mono }}>Format: PDF / Web Document</div>
+                            </div>
+                          </div>
+                          <button
+                            className="academic-btn btn-academic-primary"
+                            style={{ padding: '6px 14px', fontSize: '13px' }}
+                            onClick={() => openDocumentViewer(doc)}
+                          >
+                            <BookOpen size={14} /> View Lab Manual
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 7. Book References */}
+                {bookReferences.length > 0 && (
+                  <div className="academic-section-card">
+                    <div className="section-header-bar" style={{ cursor: 'default' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <BookOpen size={18} style={{ color: 'var(--primary-blue)' }} /> Recommended Book References
+                      </span>
+                    </div>
+                    <div className="section-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {bookReferences.map((book, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '14px 18px',
+                          backgroundColor: 'var(--surface-l2)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{book.title}</div>
+                            {book.author && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>By {book.author}</div>}
+                          </div>
+                          {book.link && (
+                            <a
+                              href={book.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="academic-btn btn-academic-secondary"
+                              style={{ padding: '6px 14px', fontSize: '13px', textDecoration: 'none' }}
+                            >
+                              <ExternalLink size={14} /> Open Link
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 8. Virtual Lab Links */}
+                {virtualLabLinks.length > 0 && (
+                  <div className="academic-section-card">
+                    <div className="section-header-bar" style={{ cursor: 'default' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <LinkIcon size={18} style={{ color: 'var(--primary-blue)' }} /> Interactive Virtual Lab Simulations
+                      </span>
+                    </div>
+                    <div className="section-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {virtualLabLinks.map((vl, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '14px 18px',
+                          backgroundColor: 'var(--surface-l2)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{vl.title}</div>
+                            {vl.provider_name && <div style={{ fontSize: '11px', color: 'var(--primary-blue)', fontFamily: font.mono }}>{vl.provider_name}</div>}
+                            {vl.description && <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{vl.description}</div>}
+                          </div>
+                          <a
+                            href={vl.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="academic-btn btn-academic-primary"
+                            style={{ padding: '6px 14px', fontSize: '13px', textDecoration: 'none' }}
+                          >
+                            Launch Simulation <ExternalLink size={14} />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Navigation Action */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
                   {session?.session_completed_at || session?.checklist_completed_at || session?.learning_stage_completed_at ? (
@@ -1834,6 +2048,95 @@ export default function ExperimentWorkspace() {
                     Confirm physical tasks completed on the workbench before submitting data for final faculty verification.
                   </p>
                 </div>
+                {/* Experiment Questionnaire Assessment */}
+                {questionnaireItems.length > 0 && (
+                  <div className="academic-section-card" style={{ padding: '20px', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <QuestionIcon size={18} style={{ color: 'var(--primary-blue)' }} /> Experiment Questionnaire ({questionnaireItems.length} Questions)
+                      </span>
+                      {questionnaireSaved && (
+                        <span className="status-chip pass" style={{ padding: '4px 10px', fontSize: '11px' }}>
+                          ✓ Responses Recorded
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {questionnaireItems.map((q, idx) => {
+                        const currentAns = questionnaireResponses[q.question_id] || {};
+                        return (
+                          <div key={q.question_id || idx} style={{
+                            padding: '16px',
+                            backgroundColor: 'var(--surface-l2)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '8px'
+                          }}>
+                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                              <span style={{ color: 'var(--primary-blue)', fontFamily: font.mono, marginRight: '6px' }}>Q{q.question_order || idx + 1}.</span>
+                              {q.question_text}
+                            </div>
+
+                            {q.question_type === 'boolean' ? (
+                              <div style={{ display: 'flex', gap: '12px' }}>
+                                <button
+                                  type="button"
+                                  className="academic-btn"
+                                  style={{
+                                    padding: '8px 24px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    backgroundColor: currentAns.answer_boolean === true ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface-l1)',
+                                    borderColor: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--border-color)',
+                                    color: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--text-secondary)'
+                                  }}
+                                  onClick={() => handleAnswerBoolean(q.question_id, true)}
+                                >
+                                  Yes
+                                </button>
+                                <button
+                                  type="button"
+                                  className="academic-btn"
+                                  style={{
+                                    padding: '8px 24px',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    backgroundColor: currentAns.answer_boolean === false ? 'rgba(239, 68, 68, 0.2)' : 'var(--surface-l1)',
+                                    borderColor: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--border-color)',
+                                    color: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--text-secondary)'
+                                  }}
+                                  onClick={() => handleAnswerBoolean(q.question_id, false)}
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                className="form-input"
+                                style={{ width: '100%', fontSize: '13px' }}
+                                placeholder="Type your answer here..."
+                                value={currentAns.answer_text || ''}
+                                onChange={(e) => handleAnswerText(q.question_id, e.target.value)}
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                        <button
+                          className="academic-btn btn-academic-primary"
+                          style={{ padding: '8px 20px', fontSize: '13px' }}
+                          onClick={handleSaveQuestionnaire}
+                          disabled={savingQuestionnaire}
+                        >
+                          {savingQuestionnaire ? 'Saving Answers...' : 'Save Questionnaire Responses'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Inspection Checklist Table */}
                 <div className="academic-section-card" style={{ padding: 0 }}>
@@ -2132,6 +2435,14 @@ export default function ExperimentWorkspace() {
           <Camera size={24} />
         </button>
       )}
+
+      {/* Document Viewer Modal */}
+      <DocumentViewerModal
+        isOpen={isDocumentViewerOpen}
+        onClose={() => setIsDocumentViewerOpen(false)}
+        documentUrl={selectedDocumentUrl}
+        documentTitle={selectedDocumentTitle}
+      />
     </div>
   );
 }

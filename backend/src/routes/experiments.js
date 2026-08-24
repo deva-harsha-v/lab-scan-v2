@@ -150,9 +150,29 @@ router.get('/:id', optionalAuth, async (req, res) => {
       return res.status(404).json({ error: 'Experiment content version not found.' });
     }
 
-    // 3. Fetch checklist items for this version
+    // 3. Fetch checklist items, questionnaire items, book references, virtual lab links, manual documents for this version
     const checklistItems = await db.query(
       'SELECT * FROM checklist_items WHERE content_version_id = ? ORDER BY item_order ASC',
+      [versionRecord.content_version_id]
+    );
+
+    const questionnaireItems = await db.query(
+      'SELECT * FROM experiment_questionnaire_items WHERE content_version_id = ? ORDER BY question_order ASC',
+      [versionRecord.content_version_id]
+    );
+
+    const bookReferences = await db.query(
+      'SELECT * FROM experiment_book_references WHERE content_version_id = ? ORDER BY created_at ASC',
+      [versionRecord.content_version_id]
+    );
+
+    const virtualLabLinks = await db.query(
+      'SELECT * FROM virtual_lab_links WHERE content_version_id = ? ORDER BY created_at ASC',
+      [versionRecord.content_version_id]
+    );
+
+    const manualDocuments = await db.query(
+      'SELECT * FROM experiment_manual_documents WHERE content_version_id = ? ORDER BY created_at ASC',
       [versionRecord.content_version_id]
     );
 
@@ -167,7 +187,11 @@ router.get('/:id', optionalAuth, async (req, res) => {
         video_links: typeof versionRecord.video_links === 'string' 
           ? JSON.parse(versionRecord.video_links) 
           : versionRecord.video_links,
-        checklist_items: checklistItems
+        checklist_items: checklistItems,
+        questionnaire_items: questionnaireItems,
+        book_references: bookReferences,
+        virtual_lab_links: virtualLabLinks,
+        manual_documents: manualDocuments
       }
     });
   } catch (err) {
@@ -206,7 +230,11 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(experim
     ar_qr_marker_id,
     theory_procedure_json,
     video_links,
-    checklist_items
+    checklist_items,
+    questionnaire_items,
+    book_references,
+    virtual_lab_links,
+    manual_documents
   } = req.body;
 
   if (!lab_id) {
@@ -238,6 +266,10 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(experim
     const theory = theory_procedure_json || [{ type: "heading", text: "New Experiment" }];
     const videos = video_links || [];
     const checklist = checklist_items || [];
+    const questionnaire = questionnaire_items || [];
+    const books = book_references || [];
+    const virtualLabs = virtual_lab_links || [];
+    const manuals = manual_documents || [];
 
     await executeTransaction(async (conn) => {
       // 1. Insert Experiment
@@ -259,6 +291,47 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(experim
           await conn.query(
             'INSERT INTO checklist_items (checklist_item_id, content_version_id, item_text, item_order) VALUES (?, ?, ?, ?)',
             [crypto.randomUUID(), versionId, itemText.trim(), i + 1]
+          );
+        }
+      }
+
+      // 4. Insert Questionnaire Items
+      for (let i = 0; i < questionnaire.length; i++) {
+        const item = questionnaire[i];
+        if (item.question_text && item.question_text.trim()) {
+          await conn.query(
+            'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), versionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1)]
+          );
+        }
+      }
+
+      // 5. Insert Book References
+      for (const book of books) {
+        if (book.title && book.link) {
+          await conn.query(
+            'INSERT INTO experiment_book_references (reference_id, content_version_id, title, author, link) VALUES (?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), versionId, book.title.trim(), book.author ? book.author.trim() : '', book.link.trim()]
+          );
+        }
+      }
+
+      // 6. Insert Virtual Lab Links
+      for (const vl of virtualLabs) {
+        if (vl.title && vl.url) {
+          await conn.query(
+            'INSERT INTO virtual_lab_links (link_id, content_version_id, title, url, provider_name, description) VALUES (?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), versionId, vl.title.trim(), vl.url.trim(), vl.provider_name ? vl.provider_name.trim() : '', vl.description ? vl.description.trim() : '']
+          );
+        }
+      }
+
+      // 7. Insert Manual Documents
+      for (const doc of manuals) {
+        if (doc.title && doc.document_url) {
+          await conn.query(
+            'INSERT INTO experiment_manual_documents (document_id, content_version_id, title, document_url, file_type) VALUES (?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), versionId, doc.title.trim(), doc.document_url.trim(), doc.file_type || 'pdf']
           );
         }
       }
@@ -292,7 +365,11 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(exper
     ar_qr_marker_id,
     theory_procedure_json,
     video_links,
-    checklist_items
+    checklist_items,
+    questionnaire_items,
+    book_references,
+    virtual_lab_links,
+    manual_documents
   } = req.body;
 
   if (!validateVideoLinks(video_links)) {
@@ -344,21 +421,72 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(exper
       );
 
       // If content fields are provided, we create a new version of content
-      if (theory_procedure_json && video_links && checklist_items) {
+      if (theory_procedure_json && video_links) {
         // Insert new version record
         await conn.query(
           'INSERT INTO experiment_content_versions (content_version_id, experiment_id, version_number, theory_procedure_json, video_links) VALUES (?, ?, ?, ?, ?)',
           [newVersionId, experimentId, newVersionNumber, JSON.stringify(theory_procedure_json), JSON.stringify(video_links)]
         );
 
-        // Insert new checklist items linked to the new version ID
-        for (let i = 0; i < checklist_items.length; i++) {
-          const itemText = checklist_items[i];
-          if (itemText && itemText.trim()) {
-            await conn.query(
-              'INSERT INTO checklist_items (checklist_item_id, content_version_id, item_text, item_order) VALUES (?, ?, ?, ?)',
-              [crypto.randomUUID(), newVersionId, itemText.trim(), i + 1]
-            );
+        // Insert new checklist items
+        if (checklist_items) {
+          for (let i = 0; i < checklist_items.length; i++) {
+            const itemText = checklist_items[i];
+            if (itemText && itemText.trim()) {
+              await conn.query(
+                'INSERT INTO checklist_items (checklist_item_id, content_version_id, item_text, item_order) VALUES (?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, itemText.trim(), i + 1]
+              );
+            }
+          }
+        }
+
+        // Insert new questionnaire items
+        if (questionnaire_items) {
+          for (let i = 0; i < questionnaire_items.length; i++) {
+            const item = questionnaire_items[i];
+            if (item.question_text && item.question_text.trim()) {
+              await conn.query(
+                'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1)]
+              );
+            }
+          }
+        }
+
+        // Insert new book references
+        if (book_references) {
+          for (const book of book_references) {
+            if (book.title && book.link) {
+              await conn.query(
+                'INSERT INTO experiment_book_references (reference_id, content_version_id, title, author, link) VALUES (?, ?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, book.title.trim(), book.author ? book.author.trim() : '', book.link.trim()]
+              );
+            }
+          }
+        }
+
+        // Insert new virtual lab links
+        if (virtual_lab_links) {
+          for (const vl of virtual_lab_links) {
+            if (vl.title && vl.url) {
+              await conn.query(
+                'INSERT INTO virtual_lab_links (link_id, content_version_id, title, url, provider_name, description) VALUES (?, ?, ?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, vl.title.trim(), vl.url.trim(), vl.provider_name ? vl.provider_name.trim() : '', vl.description ? vl.description.trim() : '']
+              );
+            }
+          }
+        }
+
+        // Insert new manual documents
+        if (manual_documents) {
+          for (const doc of manual_documents) {
+            if (doc.title && doc.document_url) {
+              await conn.query(
+                'INSERT INTO experiment_manual_documents (document_id, content_version_id, title, document_url, file_type) VALUES (?, ?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, doc.title.trim(), doc.document_url.trim(), doc.file_type || 'pdf']
+              );
+            }
           }
         }
       }
@@ -367,12 +495,12 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(exper
     // Audit log
     await logAction(req.user.user_id, 'UPDATE_EXPERIMENT', 'EXPERIMENT', experimentId, {
       meta_updated: { experiment_name, ar_qr_marker_id: markerInt },
-      content_version_bumped: (theory_procedure_json && video_links && checklist_items) ? newVersionNumber : false
+      content_version_bumped: (theory_procedure_json && video_links) ? newVersionNumber : false
     });
 
     res.json({ 
       message: 'Experiment updated successfully.',
-      version_bumped: (theory_procedure_json && video_links && checklist_items) ? newVersionNumber : false
+      version_bumped: (theory_procedure_json && video_links) ? newVersionNumber : false
     });
   } catch (err) {
     if (err.code === '23505' || err.code === 'ER_DUP_ENTRY' || err.message.includes('unique constraint') || err.message.includes('Duplicate entry')) {

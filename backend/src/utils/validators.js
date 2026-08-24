@@ -57,6 +57,31 @@ const videoLinkSchema = z.object({
   min_duration: z.number().nonnegative().optional().default(0)
 });
 
+const questionnaireItemSchema = z.object({
+  question_text: z.string().trim().min(1, 'Question text is required.'),
+  question_type: z.enum(['boolean', 'text'], { errorMap: () => ({ message: 'Question type must be boolean or text.' }) }),
+  question_order: z.number().int().min(1).max(5, 'Question order must be between 1 and 5.')
+});
+
+const bookReferenceSchema = z.object({
+  title: z.string().trim().min(1, 'Book title is required.'),
+  author: z.string().trim().optional().default(''),
+  link: z.string().url('Book link must be a valid URL.')
+});
+
+const virtualLabLinkSchema = z.object({
+  title: z.string().trim().min(1, 'Virtual lab title is required.'),
+  url: z.string().url('Virtual lab URL must be a valid URL.'),
+  provider_name: z.string().trim().optional().default(''),
+  description: z.string().trim().optional().default('')
+});
+
+const manualDocumentSchema = z.object({
+  title: z.string().trim().min(1, 'Document title is required.'),
+  document_url: z.string().url('Document URL must be a valid URL.'),
+  file_type: z.string().trim().optional().default('pdf')
+});
+
 const experimentSchema = z.object({
   lab_id: z.string().uuid('Lab ID must be a valid UUID.').optional(), // Optional on update
   experiment_name: z.string().trim().min(1, 'Experiment name is required.'),
@@ -64,7 +89,22 @@ const experimentSchema = z.object({
   ar_qr_marker_id: z.coerce.number().int().min(0).max(99, 'Marker ID must be between 0 and 99.'),
   theory_procedure_json: z.array(z.any()).optional(),
   video_links: z.array(videoLinkSchema).optional().default([]),
-  checklist_items: z.array(z.string().trim()).optional().default([])
+  checklist_items: z.array(z.string().trim()).optional().default([]),
+  questionnaire_items: z.array(questionnaireItemSchema).max(5, 'Maximum 5 questionnaire questions allowed.').optional().default([]),
+  book_references: z.array(bookReferenceSchema).optional().default([]),
+  virtual_lab_links: z.array(virtualLabLinkSchema).optional().default([]),
+  manual_documents: z.array(manualDocumentSchema).optional().default([])
+}).refine(data => {
+  if (!data.questionnaire_items || data.questionnaire_items.length === 0) return true;
+  const orders = data.questionnaire_items.map(q => q.question_order).sort((a, b) => a - b);
+  // Check contiguous 1..N sequence
+  for (let i = 0; i < orders.length; i++) {
+    if (orders[i] !== i + 1) return false;
+  }
+  return true;
+}, {
+  message: 'Questionnaire item orders must form a strict contiguous sequence starting at 1 (1, 2, 3...).',
+  path: ['questionnaire_items']
 });
 
 // Sessions schemas
@@ -76,6 +116,15 @@ const sessionChecklistItemSchema = z.object({
   session_id: z.string().uuid('Session ID must be a valid UUID.'),
   checklist_item_id: z.string().uuid('Checklist Item ID must be a valid UUID.'),
   is_completed: z.boolean()
+});
+
+const sessionQuestionnaireSubmissionSchema = z.object({
+  session_id: z.string().uuid('Session ID must be a valid UUID.'),
+  answers: z.array(z.object({
+    question_id: z.string().uuid('Question ID must be a valid UUID.'),
+    answer_boolean: z.boolean().nullable().optional(),
+    answer_text: z.string().nullable().optional()
+  })).min(1, 'At least one answer must be submitted.')
 });
 
 const sessionSignoffSchema = z.object({
@@ -117,8 +166,13 @@ module.exports = {
   updateProfileSchema,
   labSchema,
   experimentSchema,
+  questionnaireItemSchema,
+  bookReferenceSchema,
+  virtualLabLinkSchema,
+  manualDocumentSchema,
   sessionStartSchema,
   sessionChecklistItemSchema,
+  sessionQuestionnaireSubmissionSchema,
   sessionSignoffSchema,
   sessionVerifyArucoSchema,
   branchSchema,

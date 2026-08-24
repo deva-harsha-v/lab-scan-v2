@@ -3,7 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../config/db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { validateBody, sessionStartSchema, sessionChecklistItemSchema, sessionVerifyArucoSchema } = require('../utils/validators');
+const { validateBody, sessionStartSchema, sessionChecklistItemSchema, sessionQuestionnaireSubmissionSchema, sessionVerifyArucoSchema } = require('../utils/validators');
 const { logAction } = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
 
@@ -299,9 +299,21 @@ router.get('/active/:experimentId', authenticateToken, requireRole(['student']),
       [session.session_id]
     );
 
+    // Fetch questionnaire items & student responses
+    const questionnaireProgress = await db.query(
+      `SELECT eqi.question_id, eqi.question_text, eqi.question_type, eqi.question_order,
+              sqr.answer_boolean, sqr.answer_text, sqr.submitted_at
+       FROM experiment_questionnaire_items eqi
+       LEFT JOIN student_questionnaire_responses sqr ON eqi.question_id = sqr.question_id AND sqr.student_session_id = ?
+       WHERE eqi.content_version_id = ?
+       ORDER BY eqi.question_order ASC`,
+      [session.session_id, session.content_version_id]
+    );
+
     res.json({
       session,
-      checklist: checklistProgress
+      checklist: checklistProgress,
+      questionnaire: questionnaireProgress
     });
   } catch (err) {
     console.error('Error fetching active session:', err);
@@ -496,6 +508,92 @@ router.put('/checklist', sessionLimiter, authenticateToken, requireRole(['studen
     res.json({ message: 'Checklist item updated.' });
   } catch (err) {
     console.error('Error updating checklist item:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// POST /api/sessions/questionnaire - Submit or update student questionnaire responses (upsert)
+router.post('/questionnaire', sessionLimiter, authenticateToken, requireRole(['student']), validateBody(sessionQuestionnaireSubmissionSchema), async (req, res) => {
+  const { session_id, answers } = req.body;
+  const studentId = req.user.user_id;
+
+  try {
+    // 1. Verify ownership
+    const sessions = await db.query('SELECT * FROM student_sessions WHERE session_id = ? AND student_id = ?', [session_id, studentId]);
+    if (sessions.length === 0) {
+      return res.status(403).json({ error: 'Unauthorized session access.' });
+    }
+
+    const session = sessions[0];
+    if (session.session_completed_at || session.checklist_completed_at) {
+      return res.status(400).json({ error: 'This experiment session is completed and read-only.' });
+    }
+
+    if (!session.visual_stage_completed_at) {
+      return res.status(400).json({ error: 'Cannot submit questionnaire answers before completing the visual stage.' });
+    }
+
+    // 2. Fetch all questions for this session's content version
+    const questions = await db.query(
+      'SELECT question_id, question_type FROM experiment_questionnaire_items WHERE content_version_id = ?',
+      [session.content_version_id]
+    );
+    const questionsMap = new Map(questions.map(q => [q.question_id, q.question_type]));
+
+    // 3. Process & upsert each answer in a transaction
+    await executeTransaction(async (conn) => {
+      for (const ans of answers) {
+        const qType = questionsMap.get(ans.question_id);
+        if (!qType) continue; // Question does not belong to this content version
+
+        let answerBool = null;
+        let answerTxt = null;
+
+        if (qType === 'boolean') {
+          if (ans.answer_boolean === true || ans.answer_boolean === false) {
+            answerBool = ans.answer_boolean;
+          } else if (ans.answer_text === 'true' || ans.answer_text === '1' || ans.answer_text === 'yes') {
+            answerBool = true;
+          } else if (ans.answer_text === 'false' || ans.answer_text === '0' || ans.answer_text === 'no') {
+            answerBool = false;
+          } else {
+            answerBool = null;
+          }
+          answerTxt = null; // Explicitly NULL to satisfy chk_answer_type
+        } else if (qType === 'text') {
+          if (ans.answer_text && typeof ans.answer_text === 'string' && ans.answer_text.trim()) {
+            answerTxt = ans.answer_text.trim();
+          } else {
+            answerTxt = null;
+          }
+          answerBool = null; // Explicitly NULL to satisfy chk_answer_type
+        }
+
+        // Only insert if exactly one is non-null
+        if ((answerBool !== null && answerTxt === null) || (answerTxt !== null && answerBool === null)) {
+          await conn.query(
+            `INSERT INTO student_questionnaire_responses 
+             (student_session_id, question_id, answer_boolean, answer_text, submitted_at) 
+             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT (student_session_id, question_id) 
+             DO UPDATE SET answer_boolean = EXCLUDED.answer_boolean, 
+                           answer_text = EXCLUDED.answer_text, 
+                           submitted_at = CURRENT_TIMESTAMP`,
+            [session_id, ans.question_id, answerBool, answerTxt]
+          );
+        }
+      }
+    });
+
+    // Audit log
+    await logAction(studentId, 'SUBMIT_QUESTIONNAIRE', 'SESSION', session_id, {
+      answers_count: answers.length,
+      experiment_id: session.experiment_id
+    });
+
+    res.json({ message: 'Questionnaire responses submitted successfully.' });
+  } catch (err) {
+    console.error('Error submitting questionnaire responses:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
