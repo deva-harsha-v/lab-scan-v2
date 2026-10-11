@@ -286,7 +286,9 @@ export default function ExperimentWorkspace() {
           setManualDocuments(detail.content.manual_documents || []);
 
           if (detail.content.video_links?.length > 0) {
-            setActiveVideo(detail.content.video_links[0]);
+            const vProgress = activeSession?.current_video_progress || {};
+            const firstUnwatched = detail.content.video_links.find(v => (vProgress[v.id] || 0) < (v.min_duration || 0));
+            setActiveVideo(firstUnwatched || detail.content.video_links[0]);
           }
 
           // Determine current stage based on completions
@@ -478,17 +480,25 @@ export default function ExperimentWorkspace() {
       return;
     }
 
-    // Check if all videos are completed
-    const progress = session.current_video_progress || {};
-    const allDone = videoLinks.every(vid => (progress[vid.id] || 0) >= vid.min_duration);
+    // Check all video completion status taking into account active video progress
+    const progress = session?.current_video_progress || {};
+    const uncompletedVideos = videoLinks.filter(vid => {
+      const watched = vid.id === activeVideo?.id 
+        ? Math.max(watchedSeconds, progress[vid.id] || 0) 
+        : (progress[vid.id] || 0);
+      return watched < (vid.min_duration || 0);
+    });
 
-    // If current video is finished in UI but not synced yet, check that too
-    const currentProgressVal = activeVideo?.id === activeVideo?.id ? watchedSeconds : (progress[activeVideo?.id] || 0);
-    const currentVideoDone = currentProgressVal >= (activeVideo?.min_duration || 0);
-
-    if (!allDone && !currentVideoDone) {
-      alert('Please finish watching all video resources according to the timers before proceeding.');
-      return;
+    if (uncompletedVideos.length > 0) {
+      // If there's another uncompleted video, automatically switch to it
+      const nextVid = uncompletedVideos.find(v => v.id !== activeVideo?.id) || uncompletedVideos[0];
+      if (nextVid && nextVid.id !== activeVideo?.id) {
+        handleSelectVideo(nextVid);
+        return;
+      } else {
+        alert(`Please finish watching "${activeVideo?.title || 'this video'}" (${formatTime(remainingSeconds)} remaining) before proceeding.`);
+        return;
+      }
     }
 
     try {
@@ -1858,7 +1868,8 @@ export default function ExperimentWorkspace() {
                         <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                           {videoLinks.map((vid, idx) => {
                             const savedProgress = session?.current_video_progress?.[vid.id] || 0;
-                            const isDone = savedProgress >= vid.min_duration;
+                            const currentWatched = vid.id === activeVideo?.id ? Math.max(watchedSeconds, savedProgress) : savedProgress;
+                            const isDone = isGhostMode || currentWatched >= (vid.min_duration || 0);
                             const isActive = activeVideo?.id === vid.id;
                             return (
                               <button
@@ -1881,10 +1892,14 @@ export default function ExperimentWorkspace() {
                                   flexShrink: 0
                                 }}
                               >
-                                <Play size={12} style={{ color: isActive ? 'var(--accent-blue)' : 'var(--text-muted)' }} />
+                                {isDone ? (
+                                  <CheckCircle2 size={13} style={{ color: 'var(--success-emerald)' }} />
+                                ) : (
+                                  <Play size={12} style={{ color: isActive ? 'var(--accent-blue)' : 'var(--text-muted)' }} />
+                                )}
                                 <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '200px' }}>{vid.title}</span>
                                 <span style={{ fontSize: '10px', color: isDone ? 'var(--success-emerald)' : 'var(--text-muted)', marginLeft: '4px', fontWeight: 600 }}>
-                                  {isDone ? '✓ Met' : `${formatTime(savedProgress)} / ${formatTime(vid.min_duration)}`}
+                                  {isDone ? '✓ Met' : `${formatTime(currentWatched)} / ${formatTime(vid.min_duration)}`}
                                 </span>
                               </button>
                             );
@@ -2009,24 +2024,52 @@ export default function ExperimentWorkspace() {
 
                     {/* Unfocused Warning */}
                     {/* Proceed Action */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '20px', marginTop: '10px' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: font.mono }}>
-                        {!isGhostMode && `Resource time: ${formatTime(watchedSeconds)} / ${formatTime(activeVideo?.min_duration || 60)}`}
-                      </span>
-                      {session?.session_completed_at || session?.checklist_completed_at || session?.visual_stage_completed_at ? (
-                        <span className="status-chip pass" style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <CheckCircle2 size={16} /> Visual Stage Completed
-                        </span>
-                      ) : (
-                        <button 
-                          className="academic-btn btn-academic-primary pill"
-                          onClick={completeVisualStage}
-                          disabled={!isGhostMode && watchedSeconds < (activeVideo?.min_duration || 0) && !isCurrentVideoCompleted}
-                        >
-                          Proceed to Verification <ChevronRight size={14} />
-                        </button>
-                      )}
-                    </div>
+                    {(() => {
+                      const vProgMap = session?.current_video_progress || {};
+                      const isCurDone = isGhostMode || watchedSeconds >= (activeVideo?.min_duration || 0) || isCurrentVideoCompleted;
+                      const nextUnwatched = videoLinks.find(v => {
+                        if (v.id === activeVideo?.id) return false;
+                        const w = vProgMap[v.id] || 0;
+                        return w < (v.min_duration || 0);
+                      });
+                      const allDone = isGhostMode || (!nextUnwatched && isCurDone);
+
+                      return (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '20px', marginTop: '10px' }}>
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontFamily: font.mono }}>
+                            {!isGhostMode && `Resource time: ${formatTime(watchedSeconds)} / ${formatTime(activeVideo?.min_duration || 60)}`}
+                          </span>
+                          {session?.session_completed_at || session?.checklist_completed_at || session?.visual_stage_completed_at ? (
+                            <span className="status-chip pass" style={{ padding: '8px 16px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <CheckCircle2 size={16} /> Visual Stage Completed
+                            </span>
+                          ) : allDone ? (
+                            <button 
+                              className="academic-btn btn-academic-primary pill"
+                              onClick={completeVisualStage}
+                            >
+                              Proceed to Verification <ChevronRight size={14} />
+                            </button>
+                          ) : !isCurDone ? (
+                            <button 
+                              className="academic-btn btn-academic-primary pill"
+                              disabled={true}
+                              style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                            >
+                              Required Watch Time ({formatTime(remainingSeconds)} remaining)
+                            </button>
+                          ) : (
+                            <button 
+                              className="academic-btn btn-academic-primary pill"
+                              onClick={() => handleSelectVideo(nextUnwatched)}
+                              title={`Switch to next required video: ${nextUnwatched.title}`}
+                            >
+                              Next Video: {nextUnwatched.title} <ChevronRight size={14} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                   </div>
                 ) : (
@@ -2339,7 +2382,8 @@ export default function ExperimentWorkspace() {
                 <div className="video-playlist-container" style={{ gap: '8px' }}>
                   {videoLinks.map(vid => {
                     const savedProgress = session?.current_video_progress?.[vid.id] || 0;
-                    const isDone = savedProgress >= vid.min_duration;
+                    const currentWatched = vid.id === activeVideo?.id ? Math.max(watchedSeconds, savedProgress) : savedProgress;
+                    const isDone = isGhostMode || currentWatched >= (vid.min_duration || 0);
                     const isActive = activeVideo?.id === vid.id;
                     return (
                       <div 
@@ -2351,7 +2395,7 @@ export default function ExperimentWorkspace() {
                         <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{vid.title}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)', marginTop: '4px', fontFamily: font.mono }}>
                           <span>Target: {formatTime(vid.min_duration)}</span>
-                          {isDone ? <span style={{ color: 'var(--success-emerald)' }}>✓ MET</span> : <span>{formatTime(savedProgress)} watched</span>}
+                          {isDone ? <span style={{ color: 'var(--success-emerald)' }}>✓ MET</span> : <span>{formatTime(currentWatched)} watched</span>}
                         </div>
                       </div>
                     );
