@@ -11,7 +11,8 @@ import {
   ArrowLeft, BookOpen, AlertTriangle, 
   CheckCircle2, ChevronRight, Clock, Hash, FileText, 
   ChevronDown, ChevronUp, Edit3, Play, Pause, ShieldCheck, Camera, Lock,
-  ExternalLink, HelpCircle as QuestionIcon, Link as LinkIcon
+  ExternalLink, HelpCircle as QuestionIcon, Link as LinkIcon,
+  Award, Eye, Check, X
 } from 'lucide-react';
 import Skeleton from '../components/Skeleton';
 
@@ -40,6 +41,9 @@ export default function ExperimentWorkspace() {
   const [manualDocuments, setManualDocuments] = useState([]);
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
   const [questionnaireSaved, setQuestionnaireSaved] = useState(false);
+  const [questionnaireRevealed, setQuestionnaireRevealed] = useState(false);
+  const [questionnaireEvaluation, setQuestionnaireEvaluation] = useState(null);
+  const [revealingQuestionnaire, setRevealingQuestionnaire] = useState(false);
 
   // Document Viewer Modal State
   const [isDocumentViewerOpen, setIsDocumentViewerOpen] = useState(false);
@@ -247,9 +251,15 @@ export default function ExperimentWorkspace() {
           const detail = await apiFetch(`/experiments/${experimentId}?versionId=${activeSession.content_version_id}`);
           setExperiment(detail.experiment);
 
-          // Populate questionnaire responses from session data
+          // Populate questionnaire responses and evaluation status from session data
           if (activeQuestionnaireData && activeQuestionnaireData.length > 0) {
             const respMap = {};
+            const evalMap = {};
+            let anyEvaluated = false;
+            let totalMarks = 0;
+            let maxMarks = 0;
+            let correctCount = 0;
+
             activeQuestionnaireData.forEach(q => {
               if (q.answer_boolean !== null || q.answer_text !== null) {
                 respMap[q.question_id] = {
@@ -257,8 +267,40 @@ export default function ExperimentWorkspace() {
                   answer_text: q.answer_text
                 };
               }
+              if (q.evaluated_at) {
+                anyEvaluated = true;
+                const qMarks = q.marks || 1;
+                maxMarks += qMarks;
+                if (q.is_correct) {
+                  correctCount++;
+                  totalMarks += (q.marks_awarded !== null && q.marks_awarded !== undefined ? q.marks_awarded : qMarks);
+                }
+                evalMap[q.question_id] = {
+                  is_correct: q.is_correct,
+                  marks_awarded: q.marks_awarded,
+                  correct_answer_boolean: q.correct_answer_boolean,
+                  correct_answer_text: q.correct_answer_text,
+                  evaluated_at: q.evaluated_at,
+                  marks: qMarks
+                };
+              }
             });
+
             setQuestionnaireResponses(respMap);
+            if (anyEvaluated) {
+              setQuestionnaireRevealed(true);
+              setQuestionnaireSaved(true);
+              setQuestionnaireEvaluation({
+                summary: {
+                  total_marks: totalMarks,
+                  max_marks: maxMarks,
+                  percentage: maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 1000) / 10 : 0,
+                  correct_count: correctCount,
+                  total_questions: activeQuestionnaireData.length
+                },
+                resultsMap: evalMap
+              });
+            }
           }
 
           // Sync ArUco verification from URL parameter with backend if not already saved in session
@@ -332,6 +374,7 @@ export default function ExperimentWorkspace() {
 
   // Questionnaire & Document Handlers
   const handleAnswerBoolean = (qId, boolVal) => {
+    if (questionnaireRevealed) return;
     setQuestionnaireResponses(prev => ({
       ...prev,
       [qId]: { answer_boolean: boolVal, answer_text: null }
@@ -339,6 +382,7 @@ export default function ExperimentWorkspace() {
   };
 
   const handleAnswerText = (qId, textVal) => {
+    if (questionnaireRevealed) return;
     setQuestionnaireResponses(prev => ({
       ...prev,
       [qId]: { answer_boolean: null, answer_text: textVal }
@@ -359,7 +403,7 @@ export default function ExperimentWorkspace() {
     }));
 
     if (answersPayload.length === 0) {
-      alert('Please answer at least one question before submitting.');
+      alert('Please answer at least one question before saving.');
       return;
     }
 
@@ -376,7 +420,65 @@ export default function ExperimentWorkspace() {
       setQuestionnaireSaved(true);
     } catch (err) {
       setSavingQuestionnaire(false);
-      alert('Failed to submit questionnaire: ' + err.message);
+      alert('Failed to save questionnaire: ' + err.message);
+    }
+  };
+
+  const handleRevealQuestionnaire = async () => {
+    if (isGhostMode) {
+      alert('Answer reveal & grading preview: All answers evaluated.');
+      setQuestionnaireRevealed(true);
+      return;
+    }
+    if (!session || !session.session_id) return;
+
+    // Check if all questions are answered
+    const unanswered = questionnaireItems.filter(q => {
+      const resp = questionnaireResponses[q.question_id];
+      if (!resp) return true;
+      if (q.question_type === 'boolean') {
+        return resp.answer_boolean !== true && resp.answer_boolean !== false;
+      } else {
+        return !resp.answer_text || !resp.answer_text.trim();
+      }
+    });
+
+    if (unanswered.length > 0) {
+      alert(`Please answer all ${questionnaireItems.length} questions before revealing answers and checking marks. (${unanswered.length} question(s) remaining).`);
+      return;
+    }
+
+    const answersPayload = Object.entries(questionnaireResponses).map(([qId, ans]) => ({
+      question_id: qId,
+      answer_boolean: ans.answer_boolean,
+      answer_text: ans.answer_text
+    }));
+
+    setRevealingQuestionnaire(true);
+    try {
+      const res = await apiFetch('/sessions/questionnaire/reveal', {
+        method: 'POST',
+        body: JSON.stringify({
+          session_id: session.session_id,
+          answers: answersPayload
+        })
+      });
+
+      const resultsMap = {};
+      (res.results || []).forEach(r => {
+        resultsMap[r.question_id] = r;
+      });
+
+      setQuestionnaireRevealed(true);
+      setQuestionnaireSaved(true);
+      setQuestionnaireEvaluation({
+        summary: res.summary,
+        resultsMap
+      });
+      setRevealingQuestionnaire(false);
+    } catch (err) {
+      setRevealingQuestionnaire(false);
+      alert('Failed to reveal answers: ' + err.message);
     }
   };
 
@@ -2095,94 +2197,262 @@ export default function ExperimentWorkspace() {
                   </p>
                 </div>
                 {/* Experiment Questionnaire Assessment */}
-                {questionnaireItems.length > 0 && (
-                  <div className="academic-section-card" style={{ padding: '20px', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                      <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <QuestionIcon size={18} style={{ color: 'var(--primary-blue)' }} /> Experiment Questionnaire ({questionnaireItems.length} Questions)
-                      </span>
-                      {questionnaireSaved && (
-                        <span className="status-chip pass" style={{ padding: '4px 10px', fontSize: '11px' }}>
-                          ✓ Responses Recorded
+                {questionnaireItems.length > 0 && (() => {
+                  const totalQCount = questionnaireItems.length;
+                  const answeredCount = questionnaireItems.filter(q => {
+                    const resp = questionnaireResponses[q.question_id];
+                    if (!resp) return false;
+                    if (q.question_type === 'boolean') {
+                      return resp.answer_boolean === true || resp.answer_boolean === false;
+                    } else {
+                      return Boolean(resp.answer_text && resp.answer_text.trim());
+                    }
+                  }).length;
+                  const allAnswered = totalQCount > 0 && answeredCount === totalQCount;
+                  const evalSummary = questionnaireEvaluation?.summary;
+
+                  return (
+                    <div className="academic-section-card" style={{ padding: '20px', textAlign: 'left' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                        <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <QuestionIcon size={18} style={{ color: 'var(--primary-blue)' }} /> Experiment Questionnaire Assessment ({totalQCount} Questions)
                         </span>
-                      )}
-                    </div>
+                        {questionnaireRevealed ? (
+                          <span className="status-chip pass" style={{ padding: '4px 10px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Award size={13} /> Evaluated & Graded
+                          </span>
+                        ) : questionnaireSaved ? (
+                          <span className="status-chip pass" style={{ padding: '4px 10px', fontSize: '11px' }}>
+                            ✓ Draft Saved
+                          </span>
+                        ) : null}
+                      </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {questionnaireItems.map((q, idx) => {
-                        const currentAns = questionnaireResponses[q.question_id] || {};
-                        return (
-                          <div key={q.question_id || idx} style={{
-                            padding: '16px',
-                            backgroundColor: 'var(--surface-l2)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: '8px'
-                          }}>
-                            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                              <span style={{ color: 'var(--primary-blue)', fontFamily: font.mono, marginRight: '6px' }}>Q{q.question_order || idx + 1}.</span>
-                              {q.question_text}
+                      {/* Evaluated Score Banner */}
+                      {questionnaireRevealed && evalSummary && (
+                        <div style={{
+                          background: evalSummary.percentage >= 60 
+                            ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 78, 59, 0.20) 100%)' 
+                            : 'linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(127, 29, 29, 0.20) 100%)',
+                          border: `1px solid ${evalSummary.percentage >= 60 ? 'var(--success-emerald)' : 'var(--danger-red)'}`,
+                          borderRadius: '8px',
+                          padding: '16px 20px',
+                          marginBottom: '20px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                              width: '42px', height: '42px', borderRadius: '50%',
+                              background: evalSummary.percentage >= 60 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: evalSummary.percentage >= 60 ? 'var(--success-emerald)' : 'var(--danger-red)'
+                            }}>
+                              <Award size={22} />
                             </div>
-
-                            {q.question_type === 'boolean' ? (
-                              <div style={{ display: 'flex', gap: '12px' }}>
-                                <button
-                                  type="button"
-                                  className="academic-btn"
-                                  style={{
-                                    padding: '8px 24px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    backgroundColor: currentAns.answer_boolean === true ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface-l1)',
-                                    borderColor: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--border-color)',
-                                    color: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--text-secondary)'
-                                  }}
-                                  onClick={() => handleAnswerBoolean(q.question_id, true)}
-                                >
-                                  Yes
-                                </button>
-                                <button
-                                  type="button"
-                                  className="academic-btn"
-                                  style={{
-                                    padding: '8px 24px',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    backgroundColor: currentAns.answer_boolean === false ? 'rgba(239, 68, 68, 0.2)' : 'var(--surface-l1)',
-                                    borderColor: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--border-color)',
-                                    color: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--text-secondary)'
-                                  }}
-                                  onClick={() => handleAnswerBoolean(q.question_id, false)}
-                                >
-                                  No
-                                </button>
+                            <div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontFamily: font.mono, letterSpacing: '0.06em' }}>
+                                Assessment Performance Summary
                               </div>
-                            ) : (
-                              <input
-                                type="text"
-                                className="form-input"
-                                style={{ width: '100%', fontSize: '13px' }}
-                                placeholder="Type your answer here..."
-                                value={currentAns.answer_text || ''}
-                                onChange={(e) => handleAnswerText(q.question_id, e.target.value)}
-                              />
-                            )}
+                              <div style={{ fontSize: '19px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
+                                Score: {evalSummary.total_marks} / {evalSummary.max_marks} Marks ({evalSummary.percentage}%)
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className={`status-chip ${evalSummary.percentage >= 60 ? 'pass' : 'fail'}`} style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 700 }}>
+                              {evalSummary.correct_count} of {evalSummary.total_questions} Questions Correct
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                        <button
-                          className="academic-btn btn-academic-primary"
-                          style={{ padding: '8px 20px', fontSize: '13px' }}
-                          onClick={handleSaveQuestionnaire}
-                          disabled={savingQuestionnaire}
-                        >
-                          {savingQuestionnaire ? 'Saving Answers...' : 'Save Questionnaire Responses'}
-                        </button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {questionnaireItems.map((q, idx) => {
+                          const currentAns = questionnaireResponses[q.question_id] || {};
+                          const evalResult = questionnaireEvaluation?.resultsMap?.[q.question_id];
+                          const isEvaluated = Boolean(evalResult);
+                          const isCorrect = evalResult?.is_correct;
+
+                          return (
+                            <div key={q.question_id || idx} style={{
+                              padding: '16px',
+                              backgroundColor: isEvaluated 
+                                ? (isCorrect ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)') 
+                                : 'var(--surface-l2)',
+                              border: isEvaluated 
+                                ? (isCorrect ? '1px solid var(--success-emerald)' : '1px solid var(--danger-red)') 
+                                : '1px solid var(--border-color)',
+                              borderRadius: '8px',
+                              transition: 'all 0.2s ease'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                                  <span style={{ color: 'var(--primary-blue)', fontFamily: font.mono, marginRight: '6px' }}>Q{q.question_order || idx + 1}.</span>
+                                  {q.question_text}
+                                </div>
+                                {isEvaluated ? (
+                                  <span style={{
+                                    fontSize: '11px',
+                                    fontWeight: 700,
+                                    padding: '4px 9px',
+                                    borderRadius: '4px',
+                                    background: isCorrect ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                                    color: isCorrect ? 'var(--success-emerald)' : 'var(--danger-red)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    flexShrink: 0
+                                  }}>
+                                    {isCorrect ? <Check size={13} /> : <X size={13} />}
+                                    {isCorrect ? `+${evalResult.marks_awarded !== null && evalResult.marks_awarded !== undefined ? evalResult.marks_awarded : 1} Mark (Correct)` : '0 Marks (Incorrect)'}
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: font.mono, flexShrink: 0 }}>
+                                    [{q.marks || 1} Mark{(q.marks || 1) > 1 ? 's' : ''}]
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Student Answer Controls */}
+                              {q.question_type === 'boolean' ? (
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                  <button
+                                    type="button"
+                                    className="academic-btn"
+                                    disabled={questionnaireRevealed}
+                                    style={{
+                                      padding: '8px 24px',
+                                      fontSize: '13px',
+                                      fontWeight: 600,
+                                      backgroundColor: currentAns.answer_boolean === true ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface-l1)',
+                                      borderColor: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--border-color)',
+                                      color: currentAns.answer_boolean === true ? 'var(--success-emerald)' : 'var(--text-secondary)',
+                                      cursor: questionnaireRevealed ? 'default' : 'pointer',
+                                      opacity: questionnaireRevealed && currentAns.answer_boolean !== true ? 0.6 : 1
+                                    }}
+                                    onClick={() => handleAnswerBoolean(q.question_id, true)}
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="academic-btn"
+                                    disabled={questionnaireRevealed}
+                                    style={{
+                                      padding: '8px 24px',
+                                      fontSize: '13px',
+                                      fontWeight: 600,
+                                      backgroundColor: currentAns.answer_boolean === false ? 'rgba(239, 68, 68, 0.2)' : 'var(--surface-l1)',
+                                      borderColor: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--border-color)',
+                                      color: currentAns.answer_boolean === false ? 'var(--danger-red)' : 'var(--text-secondary)',
+                                      cursor: questionnaireRevealed ? 'default' : 'pointer',
+                                      opacity: questionnaireRevealed && currentAns.answer_boolean !== false ? 0.6 : 1
+                                    }}
+                                    onClick={() => handleAnswerBoolean(q.question_id, false)}
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  disabled={questionnaireRevealed}
+                                  style={{
+                                    width: '100%', fontSize: '13px',
+                                    cursor: questionnaireRevealed ? 'default' : 'text',
+                                    background: questionnaireRevealed ? 'var(--surface-l1)' : undefined
+                                  }}
+                                  placeholder="Type your answer here..."
+                                  value={currentAns.answer_text || ''}
+                                  onChange={(e) => handleAnswerText(q.question_id, e.target.value)}
+                                />
+                              )}
+
+                              {/* Revealed Official Correct Answer Box */}
+                              {isEvaluated && (
+                                <div style={{
+                                  marginTop: '12px',
+                                  padding: '10px 14px',
+                                  borderRadius: '6px',
+                                  background: 'var(--surface-l1)',
+                                  borderLeft: `3px solid ${isCorrect ? 'var(--success-emerald)' : 'var(--warning-amber)'}`,
+                                  fontSize: '12.5px'
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
+                                    <ShieldCheck size={14} style={{ color: isCorrect ? 'var(--success-emerald)' : 'var(--warning-amber)' }} />
+                                    Official Correct Answer:
+                                  </div>
+                                  <div style={{ color: 'var(--text-secondary)', fontFamily: q.question_type === 'boolean' ? font.sans : font.mono }}>
+                                    {q.question_type === 'boolean' 
+                                      ? (evalResult.correct_answer_boolean === true ? 'Yes (True)' : (evalResult.correct_answer_boolean === false ? 'No (False)' : 'Valid Option'))
+                                      : (evalResult.correct_answer_text || 'Standard faculty definition')}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Bottom Actions Bar */}
+                        {!questionnaireRevealed ? (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                            <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', fontFamily: font.mono }}>
+                              Questions answered: <strong style={{ color: allAnswered ? 'var(--success-emerald)' : 'var(--accent-blue)' }}>{answeredCount}</strong> / {totalQCount}
+                              {!allAnswered && <span style={{ color: 'var(--warning-amber)', marginLeft: '6px' }}>({totalQCount - answeredCount} remaining to reveal)</span>}
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              <button
+                                className="academic-btn"
+                                style={{ padding: '8px 16px', fontSize: '13px' }}
+                                onClick={handleSaveQuestionnaire}
+                                disabled={savingQuestionnaire || revealingQuestionnaire}
+                              >
+                                {savingQuestionnaire ? 'Saving...' : 'Save Draft'}
+                              </button>
+                              {allAnswered ? (
+                                <button
+                                  className="academic-btn btn-academic-primary pill"
+                                  style={{
+                                    padding: '8px 22px', fontSize: '13px',
+                                    background: 'var(--success-emerald)', borderColor: 'var(--success-emerald)',
+                                    display: 'inline-flex', alignItems: 'center', gap: '6px'
+                                  }}
+                                  onClick={handleRevealQuestionnaire}
+                                  disabled={revealingQuestionnaire}
+                                >
+                                  <Eye size={15} /> {revealingQuestionnaire ? 'Evaluating Answers...' : 'Reveal Answers & Check Marks'}
+                                </button>
+                              ) : (
+                                <button
+                                  className="academic-btn pill"
+                                  disabled={true}
+                                  style={{ padding: '8px 18px', fontSize: '12.5px', opacity: 0.55, cursor: 'not-allowed', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                                  title="All questions must be answered first"
+                                >
+                                  <Lock size={13} /> Answer all to Reveal ({answeredCount}/{totalQCount})
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                            <span style={{ fontSize: '12.5px', color: 'var(--success-emerald)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <CheckCircle2 size={16} /> All answers evaluated & marks finalized
+                            </span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: font.mono }}>
+                              Official answers revealed
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Inspection Checklist Table */}
                 <div className="academic-section-card" style={{ padding: 0 }}>

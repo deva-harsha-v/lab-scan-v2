@@ -138,7 +138,14 @@ export default function AdminEditor() {
     }
     setQuestionnaireItems([
       ...questionnaireItems,
-      { question_text: '', question_type: 'boolean', question_order: questionnaireItems.length + 1 }
+      { 
+        question_text: '', 
+        question_type: 'boolean', 
+        question_order: questionnaireItems.length + 1,
+        correct_answer_boolean: true,
+        correct_answer_text: '',
+        marks: 1
+      }
     ]);
   };
 
@@ -639,6 +646,73 @@ export default function AdminEditor() {
                       onChange={(e) => updateQuestionnaireItem(index, 'question_text', e.target.value)}
                       placeholder={`Enter question text (e.g. ${q.question_type === 'boolean' ? 'Did you observe resonance at 50Hz?' : 'What was the calculated wavelength?'})`}
                     />
+
+                    {/* Correct Answer and Marks Configuration */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '12px', marginTop: '10px', alignItems: 'flex-start' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                          Official Correct Answer (Graded upon student "Reveal Answers"):
+                        </label>
+                        {q.question_type === 'boolean' ? (
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{
+                                padding: '6px 16px',
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                background: q.correct_answer_boolean === true ? 'rgba(16, 185, 129, 0.2)' : 'var(--surface-l1)',
+                                borderColor: q.correct_answer_boolean === true ? 'var(--success-emerald)' : 'var(--border-color)',
+                                color: q.correct_answer_boolean === true ? 'var(--success-emerald)' : 'var(--text-secondary)'
+                              }}
+                              onClick={() => updateQuestionnaireItem(index, 'correct_answer_boolean', true)}
+                            >
+                              ✓ Yes (True)
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{
+                                padding: '6px 16px',
+                                fontSize: '0.8rem',
+                                fontWeight: 600,
+                                background: q.correct_answer_boolean === false ? 'rgba(239, 68, 68, 0.2)' : 'var(--surface-l1)',
+                                borderColor: q.correct_answer_boolean === false ? 'var(--danger-red)' : 'var(--border-color)',
+                                color: q.correct_answer_boolean === false ? 'var(--danger-red)' : 'var(--text-secondary)'
+                              }}
+                              onClick={() => updateQuestionnaireItem(index, 'correct_answer_boolean', false)}
+                            >
+                              ✗ No (False)
+                            </button>
+                          </div>
+                        ) : (
+                          <input
+                            type="text"
+                            className="form-input"
+                            style={{ fontSize: '0.85rem' }}
+                            placeholder="Enter expected answer or key phrase (e.g. Resistance / R=V/I)"
+                            value={q.correct_answer_text || ''}
+                            onChange={(e) => updateQuestionnaireItem(index, 'correct_answer_text', e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                          Marks / Points:
+                        </label>
+                        <input
+                          type="number"
+                          className="form-input"
+                          min="1"
+                          max="20"
+                          style={{ width: '100%', padding: '6px 12px', fontSize: '0.85rem' }}
+                          value={q.marks || 1}
+                          onChange={(e) => updateQuestionnaireItem(index, 'marks', parseInt(e.target.value, 10) || 1)}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
                 {questionnaireItems.length === 0 && (

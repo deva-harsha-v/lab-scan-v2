@@ -66,7 +66,10 @@ const videoLinkSchema = z.object({
 const questionnaireItemSchema = z.object({
   question_text: z.string().trim().min(1, 'Question text is required.'),
   question_type: z.enum(['boolean', 'text'], { errorMap: () => ({ message: 'Question type must be boolean or text.' }) }),
-  question_order: z.number().int().min(1).max(5, 'Question order must be between 1 and 5.')
+  question_order: z.number().int().min(1).max(5, 'Question order must be between 1 and 5.'),
+  correct_answer_boolean: z.boolean().nullable().optional(),
+  correct_answer_text: z.string().trim().nullable().optional(),
+  marks: z.coerce.number().int().min(1).optional().default(1)
 });
 
 const bookReferenceSchema = z.object({
@@ -133,6 +136,15 @@ const sessionQuestionnaireSubmissionSchema = z.object({
   })).min(1, 'At least one answer must be submitted.')
 });
 
+const sessionQuestionnaireRevealSchema = z.object({
+  session_id: uuidSchema('Session ID'),
+  answers: z.array(z.object({
+    question_id: uuidSchema('Question ID'),
+    answer_boolean: z.boolean().nullable().optional(),
+    answer_text: z.string().nullable().optional()
+  })).optional().default([])
+});
+
 const sessionSignoffSchema = z.object({
   session_id: uuidSchema('Session ID')
 });
@@ -179,6 +191,7 @@ module.exports = {
   sessionStartSchema,
   sessionChecklistItemSchema,
   sessionQuestionnaireSubmissionSchema,
+  sessionQuestionnaireRevealSchema,
   sessionSignoffSchema,
   sessionVerifyArucoSchema,
   branchSchema,

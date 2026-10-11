@@ -233,17 +233,17 @@ async function runSeed() {
   }
 
   const ohmQuestions = [
-    { text: "Does the resistance of a pure metallic conductor remain constant when temperature increases significantly?", type: "boolean", order: 1 },
-    { text: "Is an ideal voltmeter connected in parallel across the resistor under test?", type: "boolean", order: 2 },
-    { text: "What is the physical significance of the slope of the V-I characteristic curve?", type: "text", order: 3 },
-    { text: "Can Ohm's law be applied directly to non-linear components such as semiconductor diodes?", type: "boolean", order: 4 },
-    { text: "State one primary source of experimental error during current measurement in this circuit.", type: "text", order: 5 }
+    { text: "Does the resistance of a pure metallic conductor remain constant when temperature increases significantly?", type: "boolean", order: 1, correct_bool: false, correct_text: null, marks: 1 },
+    { text: "Is an ideal voltmeter connected in parallel across the resistor under test?", type: "boolean", order: 2, correct_bool: true, correct_text: null, marks: 1 },
+    { text: "What is the physical significance of the slope of the V-I characteristic curve?", type: "text", order: 3, correct_bool: null, correct_text: "Resistance / Electrical Resistance (R = V/I)", marks: 1 },
+    { text: "Can Ohm's law be applied directly to non-linear components such as semiconductor diodes?", type: "boolean", order: 4, correct_bool: false, correct_text: null, marks: 1 },
+    { text: "State one primary source of experimental error during current measurement in this circuit.", type: "text", order: 5, correct_bool: null, correct_text: "Joule heating / Contact resistance / Parallax error / Instrument zero error", marks: 1 }
   ];
 
   for (const q of ohmQuestions) {
     await query(
-      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), ohmVerId, q.text, q.type, q.order]
+      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), ohmVerId, q.text, q.type, q.order, q.correct_bool, q.correct_text, q.marks || 1]
     );
   }
 
@@ -350,16 +350,16 @@ async function runSeed() {
   }
 
   const penQuestions = [
-    { text: "Does the time period of a simple pendulum depend on the mass or density of the bob?", type: "boolean", order: 1 },
-    { text: "Is the small-angle approximation (sin θ ≈ θ) valid for angular displacements exceeding 30 degrees?", type: "boolean", order: 2 },
-    { text: "Why should the oscillation amplitude be kept strictly below 15 degrees during this experiment?", type: "text", order: 3 },
-    { text: "How would the calculated value of 'g' differ if this experiment were conducted on the Moon?", type: "text", order: 4 }
+    { text: "Does the time period of a simple pendulum depend on the mass or density of the bob?", type: "boolean", order: 1, correct_bool: false, correct_text: null, marks: 1 },
+    { text: "Is the small-angle approximation (sin θ ≈ θ) valid for angular displacements exceeding 30 degrees?", type: "boolean", order: 2, correct_bool: false, correct_text: null, marks: 1 },
+    { text: "Why should the oscillation amplitude be kept strictly below 15 degrees during this experiment?", type: "text", order: 3, correct_bool: null, correct_text: "To satisfy simple harmonic motion condition / small angle approximation sin θ ≈ θ", marks: 1 },
+    { text: "How would the calculated value of 'g' differ if this experiment were conducted on the Moon?", type: "text", order: 4, correct_bool: null, correct_text: "Lower value / approximately 1.62 m/s² / 1/6th of Earth's gravity", marks: 1 }
   ];
 
   for (const q of penQuestions) {
     await query(
-      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), penVerId, q.text, q.type, q.order]
+      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), penVerId, q.text, q.type, q.order, q.correct_bool, q.correct_text, q.marks || 1]
     );
   }
 
@@ -472,16 +472,16 @@ async function runSeed() {
   }
 
   const titQuestions = [
-    { text: "Does Phenolphthalein indicator exhibit a pink coloration in acidic solutions?", type: "boolean", order: 1 },
-    { text: "Should the burette be rinsed with the solution to be filled in it prior to titration?", type: "boolean", order: 2 },
-    { text: "Distinguish between the equivalence point and the endpoint of a chemical titration.", type: "text", order: 3 },
-    { text: "Why must any air bubbles trapped in the burette nozzle be expelled before recording the initial reading?", type: "text", order: 4 }
+    { text: "Does Phenolphthalein indicator exhibit a pink coloration in acidic solutions?", type: "boolean", order: 1, correct_bool: false, correct_text: null, marks: 1 },
+    { text: "Should the burette be rinsed with the solution to be filled in it prior to titration?", type: "boolean", order: 2, correct_bool: true, correct_text: null, marks: 1 },
+    { text: "Distinguish between the equivalence point and the endpoint of a chemical titration.", type: "text", order: 3, correct_bool: null, correct_text: "Equivalence point is theoretical stoichiometric completion; endpoint is physical indicator color change", marks: 1 },
+    { text: "Why must any air bubbles trapped in the burette nozzle be expelled before recording the initial reading?", type: "text", order: 4, correct_bool: null, correct_text: "To prevent volume measurement error / ensure accurate titer volume", marks: 1 }
   ];
 
   for (const q of titQuestions) {
     await query(
-      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), titVerId, q.text, q.type, q.order]
+      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), titVerId, q.text, q.type, q.order, q.correct_bool, q.correct_text, q.marks || 1]
     );
   }
 
@@ -580,15 +580,15 @@ async function runSeed() {
   }
 
   const edtaQuestions = [
-    { text: "Does temporary hardness of water arise from dissolved bicarbonates of calcium and magnesium?", type: "boolean", order: 1 },
-    { text: "Does Eriochrome Black T indicator turn wine red in the presence of free calcium and magnesium ions at pH 10?", type: "boolean", order: 2 },
-    { text: "Why is an ammonia-ammonium chloride buffer solution added to maintain the pH strictly around 10 during EDTA titration?", type: "text", order: 3 }
+    { text: "Does temporary hardness of water arise from dissolved bicarbonates of calcium and magnesium?", type: "boolean", order: 1, correct_bool: true, correct_text: null, marks: 1 },
+    { text: "Does Eriochrome Black T indicator turn wine red in the presence of free calcium and magnesium ions at pH 10?", type: "boolean", order: 2, correct_bool: true, correct_text: null, marks: 1 },
+    { text: "Why is an ammonia-ammonium chloride buffer solution added to maintain the pH strictly around 10 during EDTA titration?", type: "text", order: 3, correct_bool: null, correct_text: "To maintain pH 10 for optimal stability of Ca-EDTA and Mg-EDTA chelate complexes and sharp EBT endpoint", marks: 1 }
   ];
 
   for (const q of edtaQuestions) {
     await query(
-      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), edtaVerId, q.text, q.type, q.order]
+      `INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), edtaVerId, q.text, q.type, q.order, q.correct_bool, q.correct_text, q.marks || 1]
     );
   }
 

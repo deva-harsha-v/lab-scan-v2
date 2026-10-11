@@ -43,7 +43,8 @@ INSERT INTO schema_migrations (version) VALUES
 ('002_lockout_and_tokens.sql'),
 ('003_aruco_verification.sql'),
 ('004_single_session_login.sql'),
-('005_questionnaire_and_resources.sql')
+('005_questionnaire_and_resources.sql'),
+('006_questionnaire_grading.sql')
 ON CONFLICT DO NOTHING;
 
 -- 3. Institutions
@@ -195,6 +196,9 @@ CREATE TABLE experiment_questionnaire_items (
     question_text TEXT NOT NULL,
     question_type VARCHAR(20) NOT NULL CHECK (question_type IN ('boolean', 'text')),
     question_order INT NOT NULL CHECK (question_order >= 1 AND question_order <= 5),
+    correct_answer_boolean BOOLEAN,
+    correct_answer_text TEXT,
+    marks INT DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (content_version_id, question_order)
 );
@@ -205,6 +209,9 @@ CREATE TABLE student_questionnaire_responses (
     question_id UUID NOT NULL REFERENCES experiment_questionnaire_items(question_id) ON DELETE CASCADE,
     answer_boolean BOOLEAN,
     answer_text TEXT,
+    is_correct BOOLEAN,
+    marks_awarded INT DEFAULT 0,
+    evaluated_at TIMESTAMP WITH TIME ZONE,
     submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (student_session_id, question_id),
     CONSTRAINT chk_answer_type CHECK (

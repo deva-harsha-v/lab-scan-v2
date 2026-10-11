@@ -176,6 +176,13 @@ router.get('/:id', optionalAuth, async (req, res) => {
       [versionRecord.content_version_id]
     );
 
+    const isPrivileged = req.user && (req.user.role === 'admin' || req.user.role === 'faculty');
+    const sanitizedQuestionnaire = questionnaireItems.map(q => {
+      if (isPrivileged) return q;
+      const { correct_answer_boolean, correct_answer_text, ...publicQ } = q;
+      return publicQ;
+    });
+
     res.json({
       experiment: exp,
       content: {
@@ -188,7 +195,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
           ? JSON.parse(versionRecord.video_links) 
           : versionRecord.video_links,
         checklist_items: checklistItems,
-        questionnaire_items: questionnaireItems,
+        questionnaire_items: sanitizedQuestionnaire,
         book_references: bookReferences,
         virtual_lab_links: virtualLabLinks,
         manual_documents: manualDocuments
@@ -299,9 +306,15 @@ router.post('/', authenticateToken, requireRole(['admin']), validateBody(experim
       for (let i = 0; i < questionnaire.length; i++) {
         const item = questionnaire[i];
         if (item.question_text && item.question_text.trim()) {
+          const ansBool = typeof item.correct_answer_boolean === 'boolean' 
+            ? item.correct_answer_boolean 
+            : (item.correct_answer_boolean === 'true' ? true : (item.correct_answer_boolean === 'false' ? false : null));
+          const ansText = item.correct_answer_text && item.correct_answer_text.trim() ? item.correct_answer_text.trim() : null;
+          const marks = parseInt(item.marks || 1, 10) || 1;
+
           await conn.query(
-            'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)',
-            [crypto.randomUUID(), versionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1)]
+            'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [crypto.randomUUID(), versionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1), ansBool, ansText, marks]
           );
         }
       }
@@ -446,9 +459,15 @@ router.put('/:id', authenticateToken, requireRole(['admin']), validateBody(exper
           for (let i = 0; i < questionnaire_items.length; i++) {
             const item = questionnaire_items[i];
             if (item.question_text && item.question_text.trim()) {
+              const ansBool = typeof item.correct_answer_boolean === 'boolean' 
+                ? item.correct_answer_boolean 
+                : (item.correct_answer_boolean === 'true' ? true : (item.correct_answer_boolean === 'false' ? false : null));
+              const ansText = item.correct_answer_text && item.correct_answer_text.trim() ? item.correct_answer_text.trim() : null;
+              const marks = parseInt(item.marks || 1, 10) || 1;
+
               await conn.query(
-                'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order) VALUES (?, ?, ?, ?, ?)',
-                [crypto.randomUUID(), newVersionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1)]
+                'INSERT INTO experiment_questionnaire_items (question_id, content_version_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [crypto.randomUUID(), newVersionId, item.question_text.trim(), item.question_type, item.question_order || (i + 1), ansBool, ansText, marks]
               );
             }
           }

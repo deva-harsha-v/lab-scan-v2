@@ -3,7 +3,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../config/db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { validateBody, sessionStartSchema, sessionChecklistItemSchema, sessionQuestionnaireSubmissionSchema, sessionVerifyArucoSchema } = require('../utils/validators');
+const { validateBody, sessionStartSchema, sessionChecklistItemSchema, sessionQuestionnaireSubmissionSchema, sessionQuestionnaireRevealSchema, sessionVerifyArucoSchema } = require('../utils/validators');
 const { logAction } = require('../utils/logger');
 const rateLimit = require('express-rate-limit');
 
@@ -325,10 +325,12 @@ router.get('/active/:experimentId', authenticateToken, requireRole(['student']),
       [session.session_id]
     );
 
-    // Fetch questionnaire items & student responses
+    // Fetch questionnaire items & student responses with grading and conditionally revealed answers
     const questionnaireProgress = await db.query(
-      `SELECT eqi.question_id, eqi.question_text, eqi.question_type, eqi.question_order,
-              sqr.answer_boolean, sqr.answer_text, sqr.submitted_at
+      `SELECT eqi.question_id, eqi.question_text, eqi.question_type, eqi.question_order, eqi.marks,
+              sqr.answer_boolean, sqr.answer_text, sqr.is_correct, sqr.marks_awarded, sqr.evaluated_at, sqr.submitted_at,
+              CASE WHEN sqr.evaluated_at IS NOT NULL THEN eqi.correct_answer_boolean ELSE NULL END AS correct_answer_boolean,
+              CASE WHEN sqr.evaluated_at IS NOT NULL THEN eqi.correct_answer_text ELSE NULL END AS correct_answer_text
        FROM experiment_questionnaire_items eqi
        LEFT JOIN student_questionnaire_responses sqr ON eqi.question_id = sqr.question_id AND sqr.student_session_id = ?
        WHERE eqi.content_version_id = ?
@@ -620,6 +622,219 @@ router.post('/questionnaire', sessionLimiter, authenticateToken, requireRole(['s
     res.json({ message: 'Questionnaire responses submitted successfully.' });
   } catch (err) {
     console.error('Error submitting questionnaire responses:', err);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// Helper to compare student answer against correct answer
+function compareQuestionnaireAnswer(qType, studentBool, studentText, correctBool, correctText) {
+  if (qType === 'boolean') {
+    if (typeof correctBool !== 'boolean') {
+      return true; // No correct answer set by admin, default pass
+    }
+    return Boolean(studentBool) === Boolean(correctBool);
+  } else if (qType === 'text') {
+    if (!correctText || !correctText.trim()) {
+      return true; // No correct answer set by admin, default pass
+    }
+    const s = String(studentText || '').trim().toLowerCase();
+    const c = String(correctText || '').trim().toLowerCase();
+    if (s === c) return true;
+
+    // Check delimited alternatives (e.g. "50 Hz / 50Hz / 50")
+    const variants = c.split(/[/;,|]/).map(v => v.trim().toLowerCase()).filter(Boolean);
+    if (variants.some(v => v === s || (v.length >= 3 && s.includes(v)) || (s.length >= 3 && v.includes(s)))) {
+      return true;
+    }
+
+    // Number matching with 5% tolerance
+    const sNum = parseFloat(s.replace(/[^0-9.-]/g, ''));
+    const cNum = parseFloat(c.replace(/[^0-9.-]/g, ''));
+    if (!isNaN(sNum) && !isNaN(cNum) && cNum !== 0) {
+      if (Math.abs(sNum - cNum) / Math.abs(cNum) <= 0.05) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return false;
+}
+
+// POST /api/sessions/questionnaire/reveal - Verify all questions answered, grade answers against admin correct answers, award marks, and reveal
+router.post('/questionnaire/reveal', sessionLimiter, authenticateToken, requireRole(['student']), validateBody(sessionQuestionnaireRevealSchema), async (req, res) => {
+  const { session_id, answers } = req.body;
+  const studentId = req.user.user_id;
+
+  try {
+    // 1. Verify session ownership
+    const sessions = await db.query('SELECT * FROM student_sessions WHERE session_id = ? AND student_id = ?', [session_id, studentId]);
+    if (sessions.length === 0) {
+      return res.status(403).json({ error: 'Unauthorized session access.' });
+    }
+
+    const session = sessions[0];
+    if (session.session_completed_at || session.checklist_completed_at) {
+      return res.status(400).json({ error: 'This experiment session is completed and read-only.' });
+    }
+
+    if (!session.visual_stage_completed_at) {
+      return res.status(400).json({ error: 'Cannot reveal questionnaire before completing the visual stage.' });
+    }
+
+    // 2. Fetch all questions for this session's content version
+    const questions = await db.query(
+      `SELECT question_id, question_text, question_type, question_order, correct_answer_boolean, correct_answer_text, marks
+       FROM experiment_questionnaire_items
+       WHERE content_version_id = ?
+       ORDER BY question_order ASC`,
+      [session.content_version_id]
+    );
+
+    if (questions.length === 0) {
+      return res.status(400).json({ error: 'No questionnaire items configured for this experiment.' });
+    }
+
+    const questionsMap = new Map(questions.map(q => [q.question_id, q]));
+
+    // 3. Upsert any pending answers sent in payload
+    if (answers && answers.length > 0) {
+      await executeTransaction(async (conn) => {
+        for (const ans of answers) {
+          const qObj = questionsMap.get(ans.question_id);
+          if (!qObj) continue;
+
+          let answerBool = null;
+          let answerTxt = null;
+
+          if (qObj.question_type === 'boolean') {
+            if (ans.answer_boolean === true || ans.answer_boolean === false) {
+              answerBool = ans.answer_boolean;
+            } else if (ans.answer_text === 'true' || ans.answer_text === '1' || ans.answer_text === 'yes') {
+              answerBool = true;
+            } else if (ans.answer_text === 'false' || ans.answer_text === '0' || ans.answer_text === 'no') {
+              answerBool = false;
+            }
+          } else if (qObj.question_type === 'text') {
+            if (ans.answer_text && typeof ans.answer_text === 'string' && ans.answer_text.trim()) {
+              answerTxt = ans.answer_text.trim();
+            }
+          }
+
+          if ((answerBool !== null && answerTxt === null) || (answerTxt !== null && answerBool === null)) {
+            await conn.query(
+              `INSERT INTO student_questionnaire_responses 
+               (student_session_id, question_id, answer_boolean, answer_text, submitted_at) 
+               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT (student_session_id, question_id) 
+               DO UPDATE SET answer_boolean = EXCLUDED.answer_boolean, 
+                             answer_text = EXCLUDED.answer_text, 
+                             submitted_at = CURRENT_TIMESTAMP`,
+              [session_id, ans.question_id, answerBool, answerTxt]
+            );
+          }
+        }
+      });
+    }
+
+    // 4. Retrieve current responses from database
+    const savedResponses = await db.query(
+      `SELECT question_id, answer_boolean, answer_text
+       FROM student_questionnaire_responses
+       WHERE student_session_id = ?`,
+      [session_id]
+    );
+    const respMap = new Map(savedResponses.map(r => [r.question_id, r]));
+
+    // 5. Verify that ALL questions have been answered
+    const unanswered = [];
+    for (const q of questions) {
+      const resp = respMap.get(q.question_id);
+      const isAnswered = resp && (
+        (q.question_type === 'boolean' && resp.answer_boolean !== null) ||
+        (q.question_type === 'text' && resp.answer_text && resp.answer_text.trim())
+      );
+      if (!isAnswered) {
+        unanswered.push(`Q${q.question_order}`);
+      }
+    }
+
+    if (unanswered.length > 0) {
+      return res.status(400).json({ 
+        error: `Please answer all questions before revealing answers and marks. Unanswered: ${unanswered.join(', ')}.` 
+      });
+    }
+
+    // 6. Compare answers against admin correct answers and calculate marks
+    let totalMarks = 0;
+    let maxMarks = 0;
+    let correctCount = 0;
+    const results = [];
+
+    await executeTransaction(async (conn) => {
+      for (const q of questions) {
+        const resp = respMap.get(q.question_id);
+        const qMarks = q.marks || 1;
+        maxMarks += qMarks;
+
+        const isCorrect = compareQuestionnaireAnswer(
+          q.question_type,
+          resp.answer_boolean,
+          resp.answer_text,
+          q.correct_answer_boolean,
+          q.correct_answer_text
+        );
+
+        const marksAwarded = isCorrect ? qMarks : 0;
+        if (isCorrect) correctCount++;
+        totalMarks += marksAwarded;
+
+        await conn.query(
+          `UPDATE student_questionnaire_responses
+           SET is_correct = ?, marks_awarded = ?, evaluated_at = CURRENT_TIMESTAMP
+           WHERE student_session_id = ? AND question_id = ?`,
+          [isCorrect, marksAwarded, session_id, q.question_id]
+        );
+
+        results.push({
+          question_id: q.question_id,
+          question_text: q.question_text,
+          question_type: q.question_type,
+          question_order: q.question_order,
+          student_answer_boolean: resp.answer_boolean,
+          student_answer_text: resp.answer_text,
+          correct_answer_boolean: q.correct_answer_boolean,
+          correct_answer_text: q.correct_answer_text,
+          is_correct: isCorrect,
+          marks_awarded: marksAwarded,
+          max_marks: qMarks
+        });
+      }
+    });
+
+    const percentage = maxMarks > 0 ? Math.round((totalMarks / maxMarks) * 1000) / 10 : 0;
+
+    // Audit log
+    await logAction(studentId, 'REVEAL_QUESTIONNAIRE', 'SESSION', session_id, {
+      total_marks: totalMarks,
+      max_marks: maxMarks,
+      percentage: percentage,
+      correct_count: correctCount,
+      total_questions: questions.length
+    });
+
+    res.json({
+      message: 'Questionnaire evaluated and answers revealed successfully.',
+      summary: {
+        total_marks: totalMarks,
+        max_marks: maxMarks,
+        percentage: percentage,
+        correct_count: correctCount,
+        total_questions: questions.length
+      },
+      results
+    });
+  } catch (err) {
+    console.error('Error revealing questionnaire responses:', err);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
