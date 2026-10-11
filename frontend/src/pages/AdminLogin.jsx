@@ -5,9 +5,11 @@ import { ShieldAlert, ArrowLeft, Loader2, Lock, User, Eye, EyeOff } from 'lucide
 import ThemeToggle from '../components/ThemeToggle';
 import LabScanLogo from '../components/LabScanLogo';
 
-if (!import.meta.env.VITE_API_BASE) {
-  throw new Error("FATAL: Environment variable VITE_API_BASE is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
+const rawBase = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL;
+if (!rawBase) {
+  throw new Error("FATAL: Environment variable VITE_API_BASE or VITE_API_URL is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
 }
+const apiBase = rawBase.replace(/\/api\/?$/, '').replace(/\/$/, '');
 
 const font = { mono: "'Space Mono', monospace", sans: "'Outfit', sans-serif" };
 
@@ -35,7 +37,6 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      const apiBase = import.meta.env.VITE_API_BASE;
       const response = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

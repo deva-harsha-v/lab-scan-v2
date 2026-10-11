@@ -1,8 +1,10 @@
-if (!import.meta.env.VITE_API_BASE) {
-  throw new Error("FATAL: Environment variable VITE_API_BASE is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
+const RAW_API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_URL;
+if (!RAW_API_BASE) {
+  throw new Error("FATAL: Environment variable VITE_API_BASE or VITE_API_URL is required but missing at build time. Ensure VITE_API_BASE is defined in your environment or .env file before building.");
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE + '/api';
+const CLEAN_API_BASE = RAW_API_BASE.replace(/\/api\/?$/, '').replace(/\/$/, '');
+const API_BASE = CLEAN_API_BASE + '/api';
 
 // Module-scoped state for synchronizing token refresh and preventing duplicate logouts
 let isLoggingOut = false;
