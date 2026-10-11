@@ -106,13 +106,39 @@ router.post('/start', sessionLimiter, authenticateToken, requireRole(['student']
       if (doubleCheck && doubleCheck.length > 0) {
         return;
       }
+      // Check if student has already completed any prior version of this experiment OR verified ArUco for this experiment
+      const [priorCompleted] = await conn.query(
+        `SELECT aruco_verified_at, session_completed_at
+         FROM student_sessions 
+         WHERE student_id = ? AND experiment_id = ? AND (session_completed_at IS NOT NULL OR aruco_verified_at IS NOT NULL)
+         ORDER BY session_completed_at DESC NULLS LAST, session_started_at DESC LIMIT 1`,
+        [studentId, experiment_id]
+      );
 
-      // Create student session
+      const hasCompletedPrior = priorCompleted && priorCompleted.length > 0 && priorCompleted[0].session_completed_at !== null;
+      const inheritedAruco = priorCompleted && priorCompleted.length > 0 ? (priorCompleted[0].aruco_verified_at || new Date().toISOString()) : null;
+
+      // If student completed a prior version 100%, pre-populate video progress so timers are already satisfied
+      let initialVideoProgress = {};
+      if (hasCompletedPrior) {
+        const [vers] = await conn.query(
+          'SELECT video_links FROM experiment_content_versions WHERE content_version_id = ?',
+          [contentVersionId]
+        );
+        if (vers && vers.length > 0) {
+          const vlinks = typeof vers[0].video_links === 'string' ? JSON.parse(vers[0].video_links) : (vers[0].video_links || []);
+          for (const v of vlinks) {
+            initialVideoProgress[v.id] = v.min_duration || 60;
+          }
+        }
+      }
+
+      // Create student session with inherited ArUco verification and video progress
       await conn.query(
         `INSERT INTO student_sessions 
-         (session_id, student_id, experiment_id, content_version_id, current_video_progress) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [sessionId, studentId, experiment_id, contentVersionId, JSON.stringify({})]
+         (session_id, student_id, experiment_id, content_version_id, current_video_progress, aruco_verified_at) 
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [sessionId, studentId, experiment_id, contentVersionId, JSON.stringify(initialVideoProgress), inheritedAruco]
       );
 
       // Fetch checklist items for this version

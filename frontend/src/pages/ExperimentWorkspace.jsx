@@ -241,6 +241,9 @@ export default function ExperimentWorkspace() {
           }
 
           setSession(activeSession);
+          if (activeSession.aruco_verified_at) {
+            setIsArUcoScanned(true);
+          }
           const detail = await apiFetch(`/experiments/${experimentId}?versionId=${activeSession.content_version_id}`);
           setExperiment(detail.experiment);
 
@@ -313,10 +316,10 @@ export default function ExperimentWorkspace() {
 
   // Auto-launch scanner modal when entering a stage that requires marker verification (Learning Stage, if not scanned yet)
   useEffect(() => {
-    if (activeStage === 'learning' && !isArUcoScanned && !isGhostMode && !loading && session && !hasScannerBeenDismissed) {
+    if (activeStage === 'learning' && !isArUcoScanned && !session?.aruco_verified_at && !isGhostMode && !loading && session && !hasScannerBeenDismissed) {
       setShowScanGatekeeper(true);
     }
-  }, [activeStage, isArUcoScanned, isGhostMode, loading, session, hasScannerBeenDismissed]);
+  }, [activeStage, isArUcoScanned, session?.aruco_verified_at, isGhostMode, loading, session, hasScannerBeenDismissed]);
 
   // Handle video selection change
   const handleSelectVideo = (vid) => {
