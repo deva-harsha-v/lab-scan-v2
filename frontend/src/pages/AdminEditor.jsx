@@ -445,7 +445,7 @@ export default function AdminEditor() {
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {bookReferences.map((book, index) => (
-                    <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                    <div key={index} className="editor-block" style={{ padding: '16px', paddingRight: '48px', position: 'relative' }}>
                       <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
                         <input 
                           type="text"
@@ -491,7 +491,7 @@ export default function AdminEditor() {
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {manualDocuments.map((doc, index) => (
-                    <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                    <div key={index} className="editor-block" style={{ padding: '16px', paddingRight: '48px', position: 'relative' }}>
                       <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
                         <input 
                           type="text"
@@ -606,19 +606,30 @@ export default function AdminEditor() {
               <div className="editor-workspace" style={{ minHeight: '120px' }}>
                 {questionnaireItems.map((q, index) => (
                   <div key={index} className="editor-block" style={{ padding: '16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--accent-blue)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', gap: '12px' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-blue)' }}>
                         Question #{index + 1}
                       </span>
-                      <select 
-                        className="form-input" 
-                        style={{ width: '180px', padding: '4px 8px', fontSize: '0.85rem' }}
-                        value={q.question_type}
-                        onChange={(e) => updateQuestionnaireItem(index, 'question_type', e.target.value)}
-                      >
-                        <option value="boolean">Yes / No (Boolean)</option>
-                        <option value="text">Short Text / Objective</option>
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <select 
+                          className="form-input" 
+                          style={{ width: 'auto', minWidth: '180px', padding: '6px 12px', fontSize: '0.85rem' }}
+                          value={q.question_type}
+                          onChange={(e) => updateQuestionnaireItem(index, 'question_type', e.target.value)}
+                        >
+                          <option value="boolean">Yes / No (Boolean)</option>
+                          <option value="text">Short Text / Objective</option>
+                        </select>
+                        <button 
+                          type="button"
+                          className="editor-block-btn" 
+                          style={{ color: 'var(--accent-red)', position: 'static', padding: '6px' }} 
+                          onClick={() => removeQuestionnaireItem(index)}
+                          title="Delete Question"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
                     </div>
 
                     <input 
@@ -628,12 +639,6 @@ export default function AdminEditor() {
                       onChange={(e) => updateQuestionnaireItem(index, 'question_text', e.target.value)}
                       placeholder={`Enter question text (e.g. ${q.question_type === 'boolean' ? 'Did you observe resonance at 50Hz?' : 'What was the calculated wavelength?'})`}
                     />
-
-                    <div className="editor-block-controls" style={{ top: '16px', right: '16px' }}>
-                      <button className="editor-block-btn" style={{ color: 'var(--accent-red)' }} onClick={() => removeQuestionnaireItem(index)}>
-                        <Trash size={16} />
-                      </button>
-                    </div>
                   </div>
                 ))}
                 {questionnaireItems.length === 0 && (
@@ -657,7 +662,7 @@ export default function AdminEditor() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {virtualLabLinks.map((vl, index) => (
-                  <div key={index} className="editor-block" style={{ padding: '16px' }}>
+                  <div key={index} className="editor-block" style={{ padding: '16px', paddingRight: '48px', position: 'relative' }}>
                     <div className="grid-2" style={{ gap: '12px', marginBottom: '10px' }}>
                       <input 
                         type="text"
