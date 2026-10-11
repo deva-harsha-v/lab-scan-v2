@@ -1,5 +1,11 @@
 const { z } = require('zod');
 
+// Flexible PostgreSQL-compatible UUID schema (accepts any valid 8-4-4-4-12 hex UUID format)
+const uuidSchema = (label = 'ID') => z.string().trim().regex(
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+  `${label} must be a valid UUID.`
+);
+
 // Password complexity schema
 const passwordSchema = z.string()
   .min(8, 'Password must be at least 8 characters long.')
@@ -17,18 +23,18 @@ const loginSchema = z.object({
 const registerStudentSchema = z.object({
   full_name: z.string().trim().min(1, 'Full name is required.'),
   roll_number: z.string().trim().min(1, 'Roll number is required.'),
-  branch_id: z.string().uuid('Branch ID must be a valid UUID.'),
+  branch_id: uuidSchema('Branch ID'),
   password: passwordSchema
 });
 
 const editStudentSchema = z.object({
-  user_id: z.string().uuid('User ID must be a valid UUID.'),
+  user_id: uuidSchema('User ID'),
   full_name: z.string().trim().min(1, 'Full name is required.'),
-  branch_id: z.string().uuid('Branch ID must be a valid UUID.')
+  branch_id: uuidSchema('Branch ID')
 });
 
 const resetPasswordSchema = z.object({
-  user_id: z.string().uuid('User ID must be a valid UUID.'),
+  user_id: uuidSchema('User ID'),
   password: passwordSchema
 });
 
@@ -45,7 +51,7 @@ const labSchema = z.object({
   lab_name: z.string().trim().min(1, 'Lab name is required.'),
   description: z.string().trim().optional().default(''),
   location: z.string().trim().optional().default('Block 4, Room 302'),
-  allowed_branches: z.array(z.string().uuid('Branch ID must be a valid UUID.')).default([])
+  allowed_branches: z.array(uuidSchema('Branch ID')).default([])
 });
 
 // Experiments schemas
@@ -83,7 +89,7 @@ const manualDocumentSchema = z.object({
 });
 
 const experimentSchema = z.object({
-  lab_id: z.string().uuid('Lab ID must be a valid UUID.').optional(), // Optional on update
+  lab_id: uuidSchema('Lab ID').optional(), // Optional on update
   experiment_name: z.string().trim().min(1, 'Experiment name is required.'),
   description: z.string().trim().optional().default(''),
   ar_qr_marker_id: z.coerce.number().int().min(0).max(99, 'Marker ID must be between 0 and 99.'),
@@ -109,30 +115,30 @@ const experimentSchema = z.object({
 
 // Sessions schemas
 const sessionStartSchema = z.object({
-  experiment_id: z.string().uuid('Experiment ID must be a valid UUID.')
+  experiment_id: uuidSchema('Experiment ID')
 });
 
 const sessionChecklistItemSchema = z.object({
-  session_id: z.string().uuid('Session ID must be a valid UUID.'),
-  checklist_item_id: z.string().uuid('Checklist Item ID must be a valid UUID.'),
+  session_id: uuidSchema('Session ID'),
+  checklist_item_id: uuidSchema('Checklist Item ID'),
   is_completed: z.boolean()
 });
 
 const sessionQuestionnaireSubmissionSchema = z.object({
-  session_id: z.string().uuid('Session ID must be a valid UUID.'),
+  session_id: uuidSchema('Session ID'),
   answers: z.array(z.object({
-    question_id: z.string().uuid('Question ID must be a valid UUID.'),
+    question_id: uuidSchema('Question ID'),
     answer_boolean: z.boolean().nullable().optional(),
     answer_text: z.string().nullable().optional()
   })).min(1, 'At least one answer must be submitted.')
 });
 
 const sessionSignoffSchema = z.object({
-  session_id: z.string().uuid('Session ID must be a valid UUID.')
+  session_id: uuidSchema('Session ID')
 });
 
 const sessionVerifyArucoSchema = z.object({
-  experiment_id: z.string().uuid('Experiment ID must be a valid UUID.'),
+  experiment_id: uuidSchema('Experiment ID'),
   scanned_marker_id: z.coerce.number().int().min(0).max(99)
 });
 
